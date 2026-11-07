@@ -26,6 +26,9 @@ States shown to the page: idle, connecting, listening, thinking, speaking.
   through device tools. A ring lights the screen, switches the speaker to the alarm volume until it
   stops (the wake word, 停止 or 再睡 on the page; given up on after 10 minutes, a reminder (its chime and words over and over) after 3) and stops whatever
   the conversation was doing. The volume keys then change only that ring's volume.
+- Photo slideshows (photos.py): programs on the device (an assistant's show-images command) post images to
+  the page's server; the page shows them full screen over everything but a ring, and the screen
+  stays on until the show closes (its close button, by voice, or after its minutes).
 """
 import asyncio
 import io
@@ -40,7 +43,7 @@ from pathlib import Path
 import aiohttp
 import numpy as np
 
-from . import alarms, config, mcp, sleep, update, wake_verify
+from . import alarms, config, mcp, photos, sleep, update, wake_verify
 from .audio import OUT_RATE, Audio, load_wav
 from .device import DIM_LEVEL, Keys, Screen, normalize_screen_off
 from .hub import Hub
@@ -219,6 +222,8 @@ class Client:
         self.tools_listed = asyncio.Event()   # the hub asked for our device tools on this connection
         self.connecting = asyncio.Lock()      # one connection: a second wake while connecting waits for it
         self.screen = Screen()
+        self.slides = photos.Slides(photos.spool_root())
+        self._slides_timer = None     # closes the open show after its minutes
         try:
             self.sleep = sleep.normalize(cfg.get('sleep'))
         except ValueError:
@@ -262,6 +267,7 @@ class Client:
         self.audio.start()
         self.keys.start()
         self.screen.release()   # a hold left by a previous run must not keep the screen on
+        self.slides.clear_all()
         self._apply_sleep()
         asyncio.create_task(self._sender())
         asyncio.create_task(self._ticker())
@@ -350,6 +356,7 @@ class Client:
 
     def snapshot(self):
         return {'status': self.status(), 'models': self.models, 'alarms': self.alarm_view(),
+                'photos': self.photo_view(),
                 'thread': {'entry': self.view_entry(), 'messages': self.threads.get(self.view_entry(), [])}}
 
     def view_entry(self):
@@ -922,6 +929,35 @@ class Client:
         log.info('screen-off: %s', self.screen_off)
         self.set_state(self.state)
         return self.screen_off
+
+    # ---- photo slideshow (photos.py: POST /api/photos from programs on the device) ----
+
+    def photo_view(self):
+        show = self.slides.current if self.slides else None
+        return show.view() if show else None
+
+    def show_photos(self, show):
+        """A show was committed (web.py): put it on the page, keep the screen on, close it after its minutes."""
+        if self._slides_timer:
+            self._slides_timer.cancel()
+        self._slides_timer = asyncio.get_running_loop().call_later(
+            show.minutes * 60, lambda: asyncio.create_task(self.close_photos(show.id)))
+        self.screen.photos(True)
+        self.events.publish('photos', show.view())
+
+    async def close_photos(self, show_id=None):
+        """Page, voice (mcp) or the timer. show_id: only if that show is still the open one (a timer of a
+        replaced show does nothing). True if a show was open."""
+        show = self.slides.current if self.slides else None
+        if show is None or (show_id is not None and show.id != show_id):
+            return False
+        if self._slides_timer:
+            self._slides_timer.cancel()
+            self._slides_timer = None
+        self.slides.close()
+        self.screen.photos(False)
+        self.events.publish('photos', None)
+        return True
 
     # ---- reports (the hub's local-only /kiosk/reports endpoint) ----
 

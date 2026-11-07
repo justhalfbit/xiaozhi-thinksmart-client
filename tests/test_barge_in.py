@@ -82,6 +82,7 @@ def make_client():
     c.keys = types.SimpleNamespace(mic_on=True)
     c.sleep, c.sleeping, c.reports = {}, False, 0
     c.screen_off = {'enabled': True, 'minutes': 5}
+    c.slides, c._slides_timer = None, None
     c.sounds = {}
     c.verifier = None
     c.speech_end = 0.0

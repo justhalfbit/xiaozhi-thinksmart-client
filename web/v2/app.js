@@ -868,6 +868,69 @@ function showVolume(v) {
   hudTimer = setTimeout(() => $('hud').classList.remove('on'), 1600);
 }
 
+/* ---- photo slideshow (photos.py: programs on the device post the images) ---- */
+const slides = { show: null, i: 0, front: 0, timer: null, barTimer: null, down: null };
+const photoUrl = n => `/photos/${slides.show.id}/${n}`;
+
+function renderPhotos(p) {
+  if (p && slides.show && p.id === slides.show.id) return;   // the same show (a snapshot after reconnecting)
+  clearTimeout(slides.timer);
+  slides.show = p || null;
+  document.body.classList.toggle('showing-photos', !!p);
+  for (const id of ['photoA', 'photoB']) { $(id).classList.remove('on'); $(id).removeAttribute('src'); }
+  if (!p) { $('photos').classList.remove('bar'); return; }
+  $('photoTitle').textContent = p.title || '照片';
+  showSlide(0);
+  showPhotoBar();
+}
+
+function showSlide(n) {
+  const s = slides.show;
+  if (!s) return;
+  const i = slides.i = ((n % s.count) + s.count) % s.count;
+  const next = $(slides.front ? 'photoA' : 'photoB'), cur = $(slides.front ? 'photoB' : 'photoA');
+  const advance = () => {
+    clearTimeout(slides.timer);
+    if (s.count > 1) slides.timer = setTimeout(() => showSlide(slides.i + 1), s.interval * 1000);
+  };
+  next.onload = () => {
+    if (slides.show !== s || slides.i !== i) return;   // moved on while it loaded
+    next.classList.add('on'); cur.classList.remove('on');
+    slides.front = 1 - slides.front;
+    if (s.count > 1) new Image().src = photoUrl((i + 1) % s.count);   // ready for the next turn
+    advance();
+  };
+  next.onerror = () => { if (slides.show === s && slides.i === i) advance(); };   // skip it, keep going
+  next.src = photoUrl(i);
+  $('photoNum').textContent = s.count > 1 ? `${i + 1} / ${s.count}` : '';
+}
+
+function showPhotoBar() {
+  $('photos').classList.add('bar');
+  clearTimeout(slides.barTimer);
+  slides.barTimer = setTimeout(() => $('photos').classList.remove('bar'), 4000);
+}
+
+// one finger: swipe left/right to turn, tap to show or hide the bar (the close button is on it)
+$('photos').addEventListener('pointerdown', e => { slides.down = { x: e.clientX, y: e.clientY }; });
+$('photos').addEventListener('pointercancel', () => { slides.down = null; });
+$('photos').addEventListener('pointerup', e => {
+  const d = slides.down;
+  slides.down = null;
+  if (!d || !slides.show || e.target.closest('.photo-close')) return;
+  const dx = e.clientX - d.x, dy = e.clientY - d.y;
+  if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
+    if (slides.show.count > 1) showSlide(slides.i + (dx < 0 ? 1 : -1));
+    showPhotoBar();
+  } else if ($('photos').classList.contains('bar')) {
+    clearTimeout(slides.barTimer);
+    $('photos').classList.remove('bar');
+  } else {
+    showPhotoBar();
+  }
+});
+$('photoClose').addEventListener('click', () => post('/api/photos/close'));
+
 /* ---- events from the client ---- */
 const handlers = {
   snapshot(s) {
@@ -880,6 +943,7 @@ const handlers = {
     if (s.update) { ui.version = s.version; ui.update = s.update; }   // the demo's snapshots have none
     if (s.alarms) ui.alarms = s.alarms;
     renderModels(); renderThread(); renderStatus(); renderAlarms();
+    if ('photos' in s) renderPhotos(s.photos);   // the demo's snapshots have none
     updateFinished((s.update || {}).job);
   },
   power(p) {
@@ -915,6 +979,7 @@ const handlers = {
   alarms(a) {
     ui.alarms = a; renderAlarms();
   },
+  photos: p => renderPhotos(p),
   level(l) {
     level.target = ui.status.state === 'speaking' ? Math.min(1, l.out * 6) : micLevel(l.mic);
   },
