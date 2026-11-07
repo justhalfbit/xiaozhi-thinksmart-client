@@ -10,7 +10,10 @@ States shown to the page: idle, connecting, listening, thinking, speaking.
   The same while the hub is still recognising what was said (the wake word is listened for again
   once its VAD says the user stopped) or thinking: the question is dropped, whatever of that turn
   still arrives (its text, its reply) is ignored, and the mic opens for a new one at once.
-- After a reply the microphone stays open for follow_up_seconds, then stops uploading.
+- After a reply the microphone stays open for follow_up_seconds, then stops uploading. With
+  follow_up 'question' (the default) only a reply that asks something back opens it: otherwise
+  talking on after an answer, to someone else in the room, would be taken as the next question.
+  'always' opens it after every reply, 'never' after none (the wake word is then needed each time).
   The connection itself stays until the hub closes it (no speech for ~2 minutes, an exit
   word, the end button), so waking again within that time keeps the conversation.
 - The hub keeps every model's conversation on disk (data/chat.db) and gives the next connection
@@ -66,6 +69,11 @@ MAX_LISTEN = 60          # seconds: one wake never keeps the mic open longer (a 
 RECOGNITION_WAIT = 15    # seconds to wait for the hub's text after the user stops (long sentences)
 NORMAL_STOP_TAIL = 0.6   # a normal "tts stop" leaves less than this queued; more means aborted
 PUNCT = set('，。！？；：、,.!?;:…')
+QUESTION_TAIL = 15       # a reply asks back when a question mark is among its last this many characters
+# after the last question mark: closing quotes and brackets, a trailing emoji, or a short add-on
+# such as "要不要设个闹钟？比如明早七点"
+TRAILING = set(' \t\n）)」』"”’\'～~…—*')
+FOLLOW_UPS = ('question', 'always', 'never')
 REPORT_POLL = 10         # seconds between asking the hub for pending reports (local HTTP)
 HISTORY_LIMIT = 50       # messages per model shown from the hub's saved conversations
 MODEL_POLL = 30          # seconds between asking the hub for its models (changes made in its admin page)
@@ -130,6 +138,15 @@ def overlay(base, extra, at):
 
 ZAI_AT = 0.15   # seconds into the wake chime: just after its second note (0.09 s)
 C5, E5, G5, A5, B5, C6, D6, E6 = 523.25, 659.25, 783.99, 880.0, 987.77, 1046.5, 1174.66, 1318.5
+
+
+def asks_back(text):
+    """The reply ends by asking the user something (the hub keeps "？" on the sentences it sends;
+    it strips "。！" and emoji)."""
+    t = (text or '').rstrip()
+    while t and (t[-1] in TRAILING or ord(t[-1]) >= 0x1F000):
+        t = t[:-1]
+    return t.endswith('吗') or any(ch in '？?' for ch in t[-QUESTION_TAIL:])
 
 
 def has_default_route():
@@ -679,8 +696,14 @@ class Client:
                     log.warning('the turn ended without a reply')
                     self.events.publish('toast', {'kind': 'error', 'text': '网络还没连上，稍后再试' if not has_default_route()
                                                   else '没收到回答，可能是网络或模型服务连不上，稍后再试'})
+                said = self.bot_msg['text'] if self.bot_msg else None
                 self.bot_msg = self.question = None
-                if self.listen_after_reply:
+                if self.listen_after_reply and not msg.get('interrupted') and not self.wants_follow_up(said):
+                    # an answer that asks nothing back: what is said next isn't for us unless the wake
+                    # word comes first. The connection stays, so waking again keeps the conversation
+                    self.listen_after_reply = False
+                    self.set_state('idle')
+                elif self.listen_after_reply:
                     asyncio.create_task(self._listen_after_reply())
                 elif self.uploading:
                     self.heard = True
@@ -717,6 +740,19 @@ class Client:
             x['entry'] = self.entry
         self.threads.setdefault(self.entry, []).extend(moved)
         self.events.publish('thread', {'entry': self.entry, 'messages': self.threads[self.entry]})
+
+    def wants_follow_up(self, said):
+        """Open the mic after this reply? (said: its text; None when nothing was shown, e.g. the turn
+        failed, and then the user may want to say it again at once.)"""
+        mode = self.cfg.get('follow_up', 'question')
+        if mode not in FOLLOW_UPS:
+            mode = 'question'
+        if mode != 'question' or said is None:
+            ok = mode != 'never'
+        else:
+            ok = asks_back(said)
+        log.info('after the reply: %s', 'listening for a follow-up' if ok else 'mic closed until the wake word')
+        return ok
 
     async def _listen_after_reply(self):
         """Reopen the mic for a follow-up once the last of the reply has been played (uploading
