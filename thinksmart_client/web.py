@@ -6,7 +6,7 @@ import time
 
 from aiohttp import web
 
-from . import __version__, update
+from . import __version__, photos, update
 from .app import ROOT, Client, local_ip
 
 log = logging.getLogger(__name__)
@@ -137,6 +137,64 @@ def make_app(client: Client):
         body = await request.json()
         return web.json_response(await client.clear_history(bool(body.get('memory_only'))))
 
+    async def read_part(part, limit):
+        buf = bytearray()
+        while True:
+            chunk = await part.read_chunk(64 * 1024)
+            if not chunk:
+                return bytes(buf)
+            buf += chunk
+            if len(buf) > limit:
+                raise ValueError(f'a part is over {limit} bytes')
+
+    async def photos_show(request):
+        """multipart/form-data: image (repeated, in order; JPEG/PNG/WebP already sized for the screen),
+        title, interval_seconds, minutes. Replaces the open show. 127.0.0.1 only, like the whole page."""
+        if client.slides is None:
+            return web.json_response({'ok': False, 'error': 'slideshows are not available'}, status=503)
+        try:
+            reader = await request.multipart()
+        except (AssertionError, ValueError, KeyError):
+            return web.json_response({'ok': False, 'error': 'send multipart/form-data'}, status=400)
+        upload = client.slides.begin()
+        fields = {}
+        try:
+            while True:
+                part = await reader.next()
+                if part is None:
+                    break
+                name = getattr(part, 'name', None)   # a nested multipart has none
+                if name == 'image':
+                    upload.add(await read_part(part, photos.MAX_IMAGE_BYTES))
+                elif name in ('title', 'interval_seconds', 'minutes'):
+                    fields[name] = (await read_part(part, 1024)).decode('utf-8', 'replace')
+                else:
+                    await part.release()
+            show = upload.commit(**fields)
+        except ValueError as e:
+            upload.abort()
+            return web.json_response({'ok': False, 'error': str(e)}, status=400)
+        except BaseException:
+            upload.abort()
+            raise
+        client.show_photos(show)
+        return web.json_response({'ok': True, 'photos': show.view()})
+
+    async def photos_close(_request):
+        return web.json_response({'ok': True, 'closed': await client.close_photos()})
+
+    async def photos_get(_request):
+        return web.json_response({'photos': client.photo_view()})
+
+    async def photo_file(request):
+        found = client.slides.file(request.match_info['show'], request.match_info['n']) if client.slides else None
+        if found is None:
+            raise web.HTTPNotFound()
+        path, content_type = found
+        # a show's id is never reused: its images can be cached for as long as it may be open
+        return web.FileResponse(path, headers={'Content-Type': content_type,
+                                               'Cache-Control': f'private, max-age={photos.MINUTES_RANGE[1] * 60}'})
+
     async def health(_request):
         return web.json_response({'version': __version__, **client.health()})
 
@@ -184,6 +242,10 @@ def make_app(client: Client):
     app.router.add_post('/api/alarms/missed/clear', alarm_missed_clear)
     app.router.add_post('/api/reports/play', action(client.play_reports))
     app.router.add_post('/api/history/clear', clear_history)
+    app.router.add_post('/api/photos', photos_show)
+    app.router.add_post('/api/photos/close', photos_close)
+    app.router.add_get('/api/photos', photos_get)
+    app.router.add_get('/photos/{show}/{n}', photo_file)
     app.router.add_get('/api/health', health)
     app.router.add_get('/api/network', network)
     app.router.add_post('/api/power-off', power_off)

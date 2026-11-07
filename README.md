@@ -20,6 +20,7 @@
 | `thinksmart_client/alarms.py` | 倒计时、闹钟、提醒（共用一种数据，可循环：每天、工作日、每周几、每月几号）：模型只传意思，几点由这里算；存在 `~/.local/share/thinksmart-client/alarms/`（临时文件 + fsync + 改名，防断电）；系统对时前不判断；关机错过不到 1 小时的开机补响一次；闹钟和倒计时没人停就响 10 分钟，提醒是短钢琴和弦加念内容、反复 3 分钟；错过的显示在首页，点「知道了」清掉；铃声 5 选 1：钢琴曲「咖啡时光」（默认）「晨曦」「元气早晨」「阳光小跳跃」和程序合成的木琴 |
 | `thinksmart_client/device.py` | 屏幕和按键：给系统熄屏程序写提示（对话中不熄屏、用户设的自动熄屏（1/3/5/10/30 分钟或不熄，默认 5 分钟，触摸和对话结束都按它）、唤醒词亮屏、睡眠时段调暗、用户设的亮度 0-100），读音量键和麦克风开关 |
 | `thinksmart_client/sleep.py` | 睡眠时段（可跨午夜）：回复音量减半、屏幕调暗、补报不主动念；设置存在用户配置里（`config.save`），页面设置页和语音工具都能改 |
+| `thinksmart_client/photos.py` | 照片轮播：设备上的程序（比如助手找到照片后）把缩到屏幕大小的图片发给 `POST /api/photos`，全屏轮播，左右滑动翻页，点一下出关闭按钮；放照片时屏幕常亮；图片存在 `~/.cache/thinksmart-client/photos`，关掉或换一组时删掉 |
 | `thinksmart_client/opus.py` | 系统 libopus 的 ctypes 封装 |
 | `thinksmart_client/web.py` | 页面、事件流（SSE）、按钮接口 |
 | `web/` | 界面：正式版是 `v2/`（带表情的光球，首页 `/` 和 `/v2`），第一版 `index.html`、`app.css`、`app.js` 留在 `/v1`；`test/` 是 GPU 排查用的测试页；另有提示音、厂商图标 |
@@ -38,6 +39,7 @@
 - `POST /api/alarm-volume {"volume": 0-100}`：闹钟音量（存用户配置，默认 70）；`POST /api/alarm-tone {"tone": "coffee|morning|bright|hop|marimba", "preview": false}`：选铃声，`preview` 为 true 时用闹钟音量试听一段（前 8 秒），`{"stop": true}` 停止试听（关设置页时页面会发）
 - `POST /api/alarms/delete {"id": n}`、`/api/alarms/stop`、`/api/alarms/snooze`（正在响或 15 分钟内响过的那条 10 分钟后再响）、`/api/alarms/missed/clear`
 - `POST /api/power-off`：关机（`systemctl halt`，插着电也不会自己重新开机，屏幕变黑后等 10 秒再拔电源；正在更新时不执行）。页面先收到 `power {"state": "off"}` 显示「正在关机」
+- `POST /api/photos`（`multipart/form-data`：`image` 按顺序可重复，JPEG/PNG/WebP，每张最多 3 MiB、最多 60 张，发送方先缩到屏幕大小；可选 `title`、`interval_seconds` 2–120、`minutes` 1–240，默认 6 秒、30 分钟）：全屏轮播，替换正在放的那组；`POST /api/photos/close` 关掉；`GET /api/photos` 当前状态。语音说「关掉照片」走设备工具 `self.screen.close_photos`。事件 `photos`
 - `POST /api/history/clear {}` 或 `{"memory_only": true}`：清除聊天记录（转给服务端的 `/kiosk/chat/clear`，只清服务端本机存的所有模型的记录和总结记忆，Claude Code、Grok Bot 自己的会话不动；`memory_only` 只清记忆）。聊天页的记录来自服务端存的 `GET /kiosk/chat/history`（每个模型最近 50 条），没连着时载入，断开、重启后还在；说「清除聊天记录」确认后服务端发 `{"type": "chat_history", "state": "cleared"}`，页面清空
 
 ## 第三方
