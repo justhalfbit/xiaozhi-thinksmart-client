@@ -53,7 +53,7 @@ class FakeHub:
 
 def make_client():
     c = app.Client.__new__(app.Client)
-    c.cfg = {'follow_up_seconds': 10}
+    c.cfg = {'follow_up_seconds': 10, 'follow_up': 'always'}   # test_follow_up.py tries the others
     c.events = app.Events()
     c.state = 'idle'
     c.uploading = False
