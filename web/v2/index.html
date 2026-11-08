@@ -130,6 +130,12 @@
     </button>
   </div>
   <div class="panel">
+    <div class="opt">
+      <div class="opt-text"><b>界面语言</b><span>只改变界面，不转换聊天内容或语音。</span></div>
+      <select data-language-picker aria-label="界面语言" style="font:inherit;padding:12px;border-radius:12px">
+        <option value="zh-Hans">简体中文</option><option value="zh-Hant">繁體中文</option>
+      </select>
+    </div>
     <div class="upd" id="upd">
       <div class="opt">
         <div class="opt-text">
@@ -299,6 +305,9 @@
   <div class="hud-num" id="hudNum">0</div>
 </div>
 
+<script src="/static/zh-Hant.js"></script>
+<script src="/static/i18n.js"></script>
+<script>UII18n.init();</script>
 <script src="/static/v2/app.js"></script>
 </body>
 </html>

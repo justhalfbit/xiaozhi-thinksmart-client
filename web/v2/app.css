@@ -29,7 +29,7 @@ button { font: inherit; color: inherit; border: 0; background: none; padding: 0;
 .app { position: relative; height: 100%; display: grid; grid-template-rows: 92px 1fr; padding: 0 36px 30px; }
 
 /* ---- top bar ---- */
-.top { display: flex; align-items: center; gap: 22px; }
+.top { position: relative; z-index: 1; display: flex; align-items: center; gap: 22px; }
 .brand { display: flex; align-items: center; gap: 12px; }
 .mark { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center;
         background: linear-gradient(135deg, var(--accent), var(--accent2)); box-shadow: 0 6px 20px #5ee0ff40; }

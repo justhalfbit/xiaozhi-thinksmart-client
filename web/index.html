@@ -60,6 +60,12 @@
 <div class="toast" id="toast"></div>
 <div class="hud" id="hud"><div class="hud-label">音量</div><div class="hud-bar"><i id="hudFill"></i></div><div class="hud-num" id="hudNum"></div></div>
 
+<select data-language-picker aria-label="界面语言" style="position:fixed;bottom:8px;left:8px;font:inherit">
+  <option value="zh-Hans">简体中文</option><option value="zh-Hant">繁體中文</option>
+</select>
+<script src="/static/zh-Hant.js"></script>
+<script src="/static/i18n.js"></script>
+<script>UII18n.init();</script>
 <script src="/static/app.js"></script>
 </body>
 </html>

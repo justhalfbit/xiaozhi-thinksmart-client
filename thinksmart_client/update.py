@@ -18,21 +18,40 @@ log = logging.getLogger(__name__)
 STATE = Path('/var/lib/thinksmart-update')
 STATUS = STATE / 'status.json'
 REQUESTS = STATE / 'requests'
+CUSTOM_BUILD = Path(__file__).resolve().parent.parent / 'PR-BUILD.json'
+
+
+def custom_build():
+    """Only a deployment marker enables the custom-build warning; releases have no marker."""
+    try:
+        data = json.loads(CUSTOM_BUILD.read_text())
+        if not isinstance(data, dict):
+            return None
+        return {'label': str(data.get('label') or 'PR build')[:100],
+                'commit': str(data.get('client') or '')[:40]}
+    except (OSError, ValueError):
+        return None
 
 
 def read():
     """The updater's status ({} with enabled=False when the updater isn't installed)."""
     try:
-        return {'enabled': True, **json.loads(STATUS.read_text())}
+        result = {'enabled': True, **json.loads(STATUS.read_text())}
     except FileNotFoundError:
-        return {'enabled': REQUESTS.is_dir()}
+        result = {'enabled': REQUESTS.is_dir()}
     except (OSError, ValueError):
-        return {'enabled': True}
+        result = {'enabled': True}
+    build = custom_build()
+    if build:
+        result['custom_build'] = build
+    return result
 
 
-def request(action, version='', system=''):
+def request(action, version='', system='', *, replace_custom=False):
     """Ask the updater to 'check', or to 'install' the client version and/or the system layer version
     (system first); False if it isn't installed/allowed."""
+    if action == 'install' and version and custom_build() and not replace_custom:
+        return False
     try:
         tmp = REQUESTS / f'.{action}.tmp'
         tmp.write_text(json.dumps({'action': action, 'version': version, 'system': system}))

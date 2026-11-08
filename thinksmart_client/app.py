@@ -48,6 +48,7 @@ from .device import DIM_LEVEL, Keys, Screen, normalize_screen_off
 from .hub import Hub
 from .kws import Kws
 from .opus import Decoder, Encoder
+from .wake_prompt import WakePrompt
 
 log = logging.getLogger(__name__)
 
@@ -210,15 +211,12 @@ class Client:
         self.audio = Audio(self._on_block)
         self.hub = Hub(cfg['hub_ws'], cfg['device_id'], cfg['client_id'], cfg['token'],
                        self._on_json, self._on_audio, self._on_closed)
-        sounds = ROOT / 'web' / 'sounds'
         # Wake: two rising marimba notes; goodbye is the same two falling
         self.sounds = {'wake': marimba([G5, D6], 0.09), 'bye': marimba([D6, G5], 0.12, 0.16),
                        'miss': marimba([E6, C6], 0.12, 0.16), 'error': marimba([A5, E5, C5], 0.14),
                        'report': marimba([G5, B5, D6], 0.08)}
-        if (sounds / 'zai.wav').exists():
-            # the one-character "在" comes in as the second note rings, over its tail: played after
-            # the whole chime it came ~0.4 s later
-            self.sounds['wake'] = overlay(self.sounds['wake'], load_wav(sounds / 'zai.wav'), ZAI_AT)
+        self.wake_chime = self.sounds['wake']
+        self.wake_prompt = WakePrompt(self._speech, self._set_wake_prompt)
         self.speech_end = 0.0         # monotonic: last time the user was heard talking
         self.tools_listed = asyncio.Event()   # the hub asked for our device tools on this connection
         self.connecting = asyncio.Lock()      # one connection: a second wake while connecting waits for it
@@ -422,6 +420,10 @@ class Client:
     def chime(self, source):
         self.play('wake')
         self.events.publish('woke', {'source': source})
+
+    def _set_wake_prompt(self, audio):
+        self.sounds['wake'] = (overlay(self.wake_chime, load_wav(io.BytesIO(audio)), ZAI_AT)
+                               if audio else self.wake_chime)
 
     def in_turn(self):
         """The hub is recognising, thinking or speaking: the wake word interrupts it."""
@@ -1411,6 +1413,7 @@ class Client:
         return True
 
     def _apply_models(self, data):
+        self.wake_prompt.update(data.get('tts_profile'))
         options = [describe(o) for o in data.get('options', [])]
         models = {'current': next((o for o in options if o['entry'] == data.get('selected')), None),
                   'options': options}

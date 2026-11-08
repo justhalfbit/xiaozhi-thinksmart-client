@@ -159,8 +159,11 @@ def make_app(client: Client):
         if client.state != 'idle':
             return web.json_response({'ok': False, 'error': '对话结束后再更新'}, status=409)
         body = await request.json()
+        if body.get('version') and update.custom_build() and body.get('replace_custom') is not True:
+            return web.json_response({'ok': False, 'error': '官方客戶端更新會移除自訂修改，請確認後再更新'}, status=409)
         return web.json_response({'ok': update.request('install', str(body.get('version') or ''),
-                                                       str(body.get('system') or ''))})
+                                                       str(body.get('system') or ''),
+                                                       replace_custom=body.get('replace_custom') is True)})
 
     watchers = []   # keeps the task referenced
 
