@@ -3,7 +3,7 @@
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const pad = n => String(n).padStart(2, '0');
-const WEEK = '日一二三四五六';
+const WEEK = 'SMTWTFS';
 const DEMO = new URLSearchParams(location.search).get('demo');   // null when not a demo
 if (DEMO !== null && /[?&]still\b/.test(location.search)) document.documentElement.classList.add('still');
 
@@ -17,10 +17,10 @@ const ui = {
 };
 
 const SUGGEST = [
-  ['明天北京天气怎么样？', '#ffb54729', '#ffcf7a', '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6L6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/>'],
-  ['帮我想个周末计划', '#5ee0ff24', '#8ff0ff', '<path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/>'],
-  ['讲个冷笑话', '#ff7ac824', '#ff9bd6', '<circle cx="12" cy="12" r="9"/><path d="M8 14.5a5 5 0 0 0 8 0M9 9.5h.01M15 9.5h.01"/>'],
-  ['把音量调小一点', '#9b7bff2b', '#c8b4ff', '<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 12h4"/>'],
+  ['What is the weather in Beijing tomorrow?', '#ffb54729', '#ffcf7a', '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6L6 6M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4L6 18M18 6l1.4-1.4"/>'],
+  ['Help me plan the weekend', '#5ee0ff24', '#8ff0ff', '<path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z"/>'],
+  ['Tell me a bad joke', '#ff7ac824', '#ff9bd6', '<circle cx="12" cy="12" r="9"/><path d="M8 14.5a5 5 0 0 0 8 0M9 9.5h.01M15 9.5h.01"/>'],
+  ['Turn the volume down a bit', '#9b7bff2b', '#c8b4ff', '<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 12h4"/>'],
 ];
 
 /* ---- clock ---- */
@@ -29,9 +29,9 @@ function tick() {
   const hm = pad(now.getHours()) + ':' + pad(now.getMinutes());
   $('time').textContent = hm;
   $('bigTime').textContent = hm;
-  $('bigDate').textContent = `${now.getMonth() + 1}月${now.getDate()}日  星期${WEEK[now.getDay()]}`;
+  $('bigDate').textContent = `${now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}`;
   const h = now.getHours();
-  $('greet').textContent = h < 5 ? '夜深了' : h < 9 ? '早上好' : h < 12 ? '上午好' : h < 14 ? '中午好' : h < 18 ? '下午好' : h < 23 ? '晚上好' : '夜深了';
+  $('greet').textContent = h < 5 ? 'It is late' : h < 9 ? 'Good morning' : h < 12 ? 'Good morning' : h < 14 ? 'Good afternoon' : h < 18 ? 'Good afternoon' : h < 23 ? 'Good evening' : 'It is late';
   $('ringTime').textContent = hm;
   tickAlarms();
 }
@@ -42,7 +42,7 @@ function tick() {
    speaking: three lobes turning round the ring, swelling with the reply's volume.
    Only listening/speaking redraw every frame; any state change morphs the bars over 0.4 s, then the loop stops.
    All bars are drawn on one canvas: as 48 elements, restyling them 30 times a second kept
-   the device's main thread at ~93% and the page at ~17 fps. */
+   the device main thread at ~93% and the page at ~17 fps. */
 const BARS = 48, R_IN = 110, BAR_W = 6, REST = 8, REACH = 46;   // px; REST + REACH stays inside the canvas
 const corona = document.createElement('canvas');
 const CSIZE = 330, DPR = Math.min(2, window.devicePixelRatio || 1);
@@ -66,7 +66,7 @@ function fillFor(state) {
   }
   return barFill;
 }
-// Bars of (nearly) the same opacity share one path and one fill: 48 separate fills cost the device's
+// Bars of (nearly) the same opacity share one path and one fill: 48 separate fills cost the device
 // main thread ~20% of a core while speaking. The path takes each bar's transform as it is added.
 const bucket = new Uint8Array(BARS);
 function drawBars(bars) {
@@ -183,7 +183,7 @@ function drawLive(v, p) {
 /* ---- status: orb, title, hint, buttons ---- */
 function modelName() {
   const cur = ui.models.current;
-  return cur ? cur.label : '模型';
+  return cur ? cur.label : 'Model';
 }
 const shownState = () => (ui.ptt ? 'listening' : ui.status.state);
 
@@ -192,23 +192,23 @@ function renderStatus() {
   const shown = shownState();
   document.body.dataset.state = shown;
   const text = {
-    idle: ['说<em>「小麦小麦」</em>', connected ? '对话还在，唤醒后可以接着聊' : '或者点麦克风；按住可以直接说'],
-    connecting: ['正在连接…', '连上小智网关后就开始听'],
-    listening: ui.ptt ? ['松开<em>发送</em>', '说完松开手指'] : ['我在听', '说完停一下，我就开始回答'],
-    thinking: [`<em>${esc(modelName())}</em> 正在思考`, '复杂的问题可能要想一会儿'],
-    speaking: ['正在回答', '喊「小麦小麦」或点打断就能停下'],
+    idle: ['Say <em>“Xiaomai Xiaomai”</em>', connected ? 'Chat is kept; wake to continue' : 'Or tap the mic; hold to talk'],
+    connecting: ['Connecting…', 'Listening starts once the Xiaozhi hub is connected'],
+    listening: ui.ptt ? ['Release to <em>send</em>', 'Release when finished'] : ['I am listening', 'Pause when you finish and I will answer'],
+    thinking: [`<em>${esc(modelName())}</em> is thinking`, 'Harder questions may take a moment'],
+    speaking: ['Speaking', 'Say “Xiaomai Xiaomai” or tap Stop'],
   }[shown] || ['', ''];
-  if (ui.status.recognising && !ui.ptt) text.splice(0, 2, '正在识别', '你说完了，正在把话转成文字');
+  if (ui.status.recognising && !ui.ptt) text.splice(0, 2, 'Recognizing', 'Turning what you said into text');
   const micOff = ui.status.mic === false;
   document.body.classList.toggle('mic-off', micOff);
   const reports = ui.status.reports || 0;
   const sleeping = !!(ui.status.sleep && ui.status.sleep.active);
   document.body.classList.toggle('has-reports', reports > 0);
   document.body.classList.toggle('sleeping', sleeping);
-  $('reportText').textContent = reports > 1 ? `有 ${reports} 条待汇报` : '有一条待汇报';
-  if (micOff && shown === 'idle') text.splice(0, 2, '麦克风已关', '拨开机身侧面的开关就能说话');
-  else if (reports && shown === 'idle') text[1] = '有待汇报：点右上角收听，或叫一声「小麦小麦」';
-  else if (sleeping && shown === 'idle' && !connected) text[1] = '睡眠时段：汇报不会自动念';
+  $('reportText').textContent = reports > 1 ? `${reports} reports waiting` : '1 report waiting';
+  if (micOff && shown === 'idle') text.splice(0, 2, 'Mic is off', 'Flip the side mic switch to talk');
+  else if (reports && shown === 'idle') text[1] = 'Report waiting: tap top-right, or say “Xiaomai Xiaomai”';
+  else if (sleeping && shown === 'idle' && !connected) text[1] = 'Sleep hours: reports will not be spoken';
   $('title').innerHTML = text[0];
   $('hint').textContent = text[1];
   // recognising, thinking or speaking: the turn can be interrupted (the question is dropped if nothing was said yet)
@@ -216,7 +216,7 @@ function renderStatus() {
   $('btnEnd').disabled = !connected;
   const link = $('link');
   link.classList.toggle('on', connected);
-  link.querySelector('span').textContent = connected ? '对话中' : '待机';
+  link.querySelector('span').textContent = connected ? 'In conversation' : 'Idle';
   renderSide();
   renderPending();
   setCorona(shown);
@@ -233,7 +233,7 @@ const logoSrc = m => (m && m.logo ? `/static/logos/${m.logo}.svg` : '');
 function renderModels() {
   const cur = ui.models.current;
   $('pillLogo').src = logoSrc(cur);
-  $('pillLabel').textContent = cur ? cur.label : '选择模型';
+  $('pillLabel').textContent = cur ? cur.label : 'Choose model';
   $('pillModel').textContent = cur ? (cur.model || cur.company || '') : '';
   const grid = $('grid');
   grid.textContent = '';
@@ -241,7 +241,7 @@ function renderModels() {
     const on = cur && cur.entry === m.entry;
     const b = document.createElement('button');
     b.className = 'card' + (on ? ' on' : '');
-    b.innerHTML = `<img class="tile" src="${esc(logoSrc(m))}" alt="">` + (on ? '<span class="badge">使用中</span>' : '') +
+    b.innerHTML = `<img class="tile" src="${esc(logoSrc(m))}" alt="">` + (on ? '<span class="badge">In use</span>' : '') +
       `<span><b>${esc(m.label)}</b><small>${esc(m.model || '')}</small><small class="co">${esc(m.company || '')}</small></span>`;
     b.addEventListener('click', () => switchModel(m));
     grid.appendChild(b);
@@ -254,7 +254,7 @@ function openSheet(on) {
 }
 
 // The page switches at once and the hub catches up; if it fails, back to what the client last said.
-// While a switch is on its way, the client's events about the old model don't flip the page back.
+// While a switch is on its way, the client's events about the old model do not flip the page back.
 const server = { models: null, thread: null };
 const seenThreads = {};   // entry -> the client's messages for that model, shown at once when switching to it
 let switching = null;
@@ -271,16 +271,16 @@ async function switchModel(m) {
   try {
     const r = await (await fetch('/api/model', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                                                  body: JSON.stringify({ kind: m.kind, vendor: m.vendor, entry: m.entry }) })).json();
-    if (r.ok === false) error = r.error || '切换失败';
+    if (r.ok === false) error = r.error || 'Switch failed';
   } catch (e) {
-    error = '切换失败：客户端没有响应';
+    error = 'Switch failed: client not responding';
   }
   if (switching !== m.entry) return;   // another switch since
   switching = null;
   if (server.models) ui.models = server.models;
   if (server.thread) ui.thread = server.thread;
   renderModels(); renderThread(); renderStatus();
-  toast(error || `已切换到 ${m.label}`, error ? 'error' : '');
+  toast(error || `Switched to ${m.label}`, error ? 'error' : '');
 }
 
 /* ---- settings: sleep hours ---- */
@@ -295,8 +295,8 @@ function renderSettings() {
   $('sleepTimes').classList.toggle('off', !s.enabled);
   $('sleepStart').textContent = s.start;
   $('sleepEnd').textContent = s.end;
-  $('sleepNote').textContent = !s.enabled ? '睡眠时段已关闭：补报一到就念，音量和亮度照常'
-    : s.active ? `现在是睡眠时段，到 ${s.end} 结束` : `每天 ${s.start} 到 ${s.end} 是睡眠时段，现在不在`;
+  $('sleepNote').textContent = !s.enabled ? 'Sleep hours off: reports are spoken, volume and brightness as usual'
+    : s.active ? `Sleep hours until ${s.end}` : `Sleep hours ${s.start}–${s.end} daily; not in them now`;
 }
 function sendSleep(changes, delay) {
   Object.assign(sleepEdit, changes);
@@ -308,9 +308,9 @@ function sendSleep(changes, delay) {
     try {
       const r = await (await fetch('/api/sleep', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                                                    body: JSON.stringify(body) })).json();
-      if (r.ok === false) toast(r.error || '没保存上', 'error');
+      if (r.ok === false) toast(r.error || 'Could not save', 'error');
     } catch (e) {
-      toast('没保存上：客户端没有响应', 'error');
+      toast('Could not save: client not responding', 'error');
     }
     for (const k in body) if (sleepEdit[k] === body[k]) delete sleepEdit[k];
     renderSettings();
@@ -337,17 +337,17 @@ function renderBright() {
   if (brightEdit === null) $('brightRange').value = b.level;
   $('brightRange').style.setProperty('--fill', b.level + '%');
   $('brightNum').textContent = b.level + '%';
-  $('brightNote').textContent = b.dimmed ? '睡眠时段内屏幕调暗了；拖一下滑条，这次时段就按你调的亮度'
-    : '熄屏再亮也保持这个亮度；也可以说「小麦小麦，屏幕亮一点」「调到最亮」';
+  $('brightNote').textContent = b.dimmed ? 'Sleep hours dim the screen; drag the slider for this period'
+    : 'Brightness stays after blanking. You can also say “Xiaomai Xiaomai, brighter” or “full brightness.”';
 }
 async function sendBright(body) {
   if (DEMO) { ui.status.brightness = { level: body.level, dimmed: false }; return; }
   try {
     const r = await (await fetch('/api/brightness', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                                                        body: JSON.stringify(body) })).json();
-    if (r.ok === false) toast(r.error || '没保存上', 'error');
+    if (r.ok === false) toast(r.error || 'Could not save', 'error');
   } catch (e) {
-    toast('没保存上：客户端没有响应', 'error');
+    toast('Could not save: client not responding', 'error');
   }
 }
 // The slider follows the finger itself (pointer events, like the mic button) instead of relying on
@@ -392,7 +392,7 @@ function renderScreenOff() {
   $('offSwitch').setAttribute('aria-checked', String(s.enabled));
   $('offMinutes').classList.toggle('off', !s.enabled);
   for (const b of $('offMinutes').children) b.classList.toggle('on', Number(b.dataset.m) === s.minutes);
-  $('offNote').textContent = s.enabled ? `${s.minutes} 分钟没碰屏幕、也没在对话，就熄屏` : '屏幕一直亮着，不会自动熄屏';
+  $('offNote').textContent = s.enabled ? `Screen off after ${s.minutes} min idle with no conversation` : 'Screen stays on; no auto-off';
 }
 async function sendScreenOff(changes) {
   Object.assign(offEdit, changes);
@@ -401,9 +401,9 @@ async function sendScreenOff(changes) {
   try {
     const r = await (await fetch('/api/screen-off', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                                                       body: JSON.stringify(changes) })).json();
-    if (r.ok === false) toast(r.error || '没保存上', 'error');
+    if (r.ok === false) toast(r.error || 'Could not save', 'error');
   } catch (e) {
-    toast('没保存上：客户端没有响应', 'error');
+    toast('Could not save: client not responding', 'error');
   }
   for (const k in changes) if (offEdit[k] === changes[k]) delete offEdit[k];
   renderScreenOff();
@@ -411,7 +411,7 @@ async function sendScreenOff(changes) {
 $('offSwitch').addEventListener('click', () => sendScreenOff({ enabled: !offSetting().enabled }));
 for (const b of $('offMinutes').children) b.addEventListener('click', () => sendScreenOff({ minutes: Number(b.dataset.m) }));
 
-/* ---- settings: volumes (the device's, which the keys and voice change too, and the alarms' own) ---- */
+/* ---- settings: volumes (the device, which the keys and voice change too, and the alarms' own) ---- */
 // Same finger-following slider as the brightness: at most one change every 150 ms while dragging, the
 // last one on release; what the client says meanwhile doesn't move the thumb under the finger.
 function slider(id, numId, get, send) {
@@ -455,10 +455,10 @@ async function postJson(path, body) {
   try {
     const r = await (await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' },
                                          body: JSON.stringify(body || {}) })).json();
-    if (r.ok === false) toast(r.error || '没保存上', 'error');
+    if (r.ok === false) toast(r.error || 'Could not save', 'error');
     return r;
   } catch (e) {
-    toast('没保存上：客户端没有响应', 'error');
+    toast('Could not save: client not responding', 'error');
     return { ok: false };
   }
 }
@@ -468,7 +468,7 @@ const renderAlarmVol = slider('alarmVolRange', 'alarmVolNum', () => ui.alarms.vo
   v => (DEMO ? (ui.alarms.volume = v) : postJson('/api/alarm-volume', { volume: v })));
 
 /* ---- countdowns, alarms and reminders (alarms.py: the client keeps and rings them) ---- */
-const KIND_ICON = { timer: '计时', alarm: '闹钟', reminder: '提醒' };
+const KIND_ICON = { timer: 'Timer', alarm: 'Alarm', reminder: 'Reminder' };
 const now_s = () => Date.now() / 1000;
 function hhmm(t) {
   const d = new Date(t * 1000);
@@ -478,7 +478,7 @@ function dayText(t) {
   const d = new Date(t * 1000), today = new Date();
   today.setHours(0, 0, 0, 0);
   const days = Math.round((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - today) / 86400000);
-  return { '-1': '昨天', 0: '今天', 1: '明天', 2: '后天' }[days] || `${d.getMonth() + 1}月${d.getDate()}日 星期${WEEK[d.getDay()]}`;
+  return { '-1': 'Yesterday', 0: 'Today', 1: 'Tomorrow', 2: 'In 2 days' }[days] || `${d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}`;
 }
 function left(t) {
   const s = Math.max(0, Math.round(t - now_s()));
@@ -488,12 +488,12 @@ function left(t) {
 function alarmRow(v) {
   if (v.kind === 'timer') {
     return [`<span data-left="${v.at}">${left(v.at)}</span>${v.label ? ' ' + esc(v.label) : ''}`,
-            `倒计时，${hhmm(v.at)} 响${v.snoozed ? ' · 再睡中' : ''}`];
+            `Timer, rings ${hhmm(v.at)}${v.snoozed ? ' · snoozed' : ''}`];
   }
   const sub = [dayText(v.at)];
   if (v.repeat) sub.push(esc(v.repeat));
-  if (v.snoozed) sub.push('再睡中');
-  if (v.kind === 'reminder') sub.push(v.spoken ? '到点念出来' : v.spoken === false ? '只响铃（没合成出语音）' : '正在合成语音');
+  if (v.snoozed) sub.push('Snoozed');
+  if (v.kind === 'reminder') sub.push(v.spoken ? 'Spoken at the time' : v.spoken === false ? 'Ring only (no spoken line)' : 'Synthesizing speech');
   return [`${hhmm(v.at)}${v.label ? ' ' + esc(v.label) : ''}`, sub.join(' · ')];
 }
 function renderAlarms() {
@@ -504,25 +504,25 @@ function renderAlarms() {
   // home: the running countdowns and the next alarm or reminder
   const timers = a.items.filter(v => v.kind === 'timer').slice(0, 3);
   const next = a.items.find(v => v.kind !== 'timer');
-  const chips = timers.map(v => `<div class="na timer">倒计时 <b data-left="${v.at}">${left(v.at)}</b>${v.label ? esc(v.label) : ''}</div>`);
+  const chips = timers.map(v => `<div class="na timer">Timer <b data-left="${v.at}">${left(v.at)}</b>${v.label ? esc(v.label) : ''}</div>`);
   if (next) chips.push(`<div class="na">${KIND_ICON[next.kind]} <b>${dayText(next.at)} ${hhmm(next.at)}</b>${esc(next.label || '')}</div>`);
-  if (!a.synced && a.items.length) chips.unshift('<div class="na paused">时间未同步，闹钟暂停</div>');
+  if (!a.synced && a.items.length) chips.unshift('<div class="na paused">Clock not synced; alarms paused</div>');
   $('nextAlarms').innerHTML = chips.join('');
   // settings: the list, the tones, the missed ones
-  $('alarmCount').textContent = a.items.length ? `${a.items.length} 条` : '';
+  $('alarmCount').textContent = a.items.length ? `${a.items.length} items` : '';
   $('alarmList').innerHTML = a.items.length ? a.items.map(v => {
     const [main, sub] = alarmRow(v);
     return `<div class="al ${v.kind}"><i>${KIND_ICON[v.kind]}</i><div class="al-text"><b>${main}</b><span>${sub}</span></div>` +
-      `<button class="al-del" data-id="${v.id}">删除</button></div>`;
-  }).join('') : '<div class="alarm-empty">还没有闹钟和提醒</div>';
+      `<button class="al-del" data-id="${v.id}">Delete</button></div>`;
+  }).join('') : '<div class="alarm-empty">No alarms or reminders yet</div>';
   $('tones').innerHTML = Object.entries(a.tones || {}).map(([k, name]) =>
     `<button data-tone="${esc(k)}" class="${k === a.tone ? 'on' : ''}">${esc(name)}</button>`).join('');
-  // home: the missed ones (newest first, at most 3 shown) until 知道了
+  // home: the missed ones (newest first, at most 3 shown) until Got it
   $('missedBox').hidden = !a.missed.length;
   $('missedList').innerHTML = a.missed.slice(0, 3).map(m =>
     `<div class="mh"><b>${dayText(m.at)} ${hhmm(m.at)}</b>${KIND_ICON[m.kind] || ''}${m.label ? ' · ' + esc(m.label) : ''}` +
-    `<small>${m.why === 'off' ? '设备关着' : m.kind === 'reminder' ? '提醒了 3 分钟没人停' : '响了 10 分钟没人停'}</small></div>`).join('') +
-    (a.missed.length > 3 ? `<div class="mh more">还有 ${a.missed.length - 3} 条</div>` : '');
+    `<small>${m.why === 'off' ? 'Device was off' : m.kind === 'reminder' ? 'Reminder rang 3 min' : 'Rang 10 min'}</small></div>`).join('') +
+    (a.missed.length > 3 ? `<div class="mh more">${a.missed.length - 3} more</div>` : '');
   renderAlarmVol();
   renderRing();
   tickAlarms();
@@ -531,9 +531,9 @@ function renderRing() {
   const r = ui.alarms.ringing;
   if (!r) return;
   const items = r.items || [];
-  $('ringKind').textContent = [...new Set(items.map(v => v.type))].join('、') || '闹钟';
-  $('ringLabel').textContent = items.map(v => v.label).filter(Boolean).join('、');
-  $('ringNote').textContent = (r.notes || []).join('；');
+  $('ringKind').textContent = [...new Set(items.map(v => KIND_ICON[v.kind] || v.type))].join(', ') || 'Alarm';
+  $('ringLabel').textContent = items.map(v => v.label).filter(Boolean).join(', ');
+  $('ringNote').textContent = (r.notes || []).join('; ');
 }
 function tickAlarms() {
   for (const el of document.querySelectorAll('[data-left]')) el.textContent = left(Number(el.dataset.left));
@@ -545,12 +545,12 @@ $('alarmList').addEventListener('click', e => {
   if (!b) return;
   if (!b.classList.contains('armed')) {
     b.classList.add('armed');
-    b.textContent = '确认删除';
-    setTimeout(() => { b.classList.remove('armed'); b.textContent = '删除'; }, 4000);
+    b.textContent = 'Confirm delete';
+    setTimeout(() => { b.classList.remove('armed'); b.textContent = 'Delete'; }, 4000);
     return;
   }
   if (DEMO) { ui.alarms.items = ui.alarms.items.filter(v => v.id !== Number(b.dataset.id)); return renderAlarms(); }
-  postJson('/api/alarms/delete', { id: Number(b.dataset.id) }).then(r => { if (r.ok) toast('已删除'); });
+  postJson('/api/alarms/delete', { id: Number(b.dataset.id) }).then(r => { if (r.ok) toast('Deleted'); });
 });
 $('tones').addEventListener('click', e => {
   const b = e.target.closest('button');
@@ -563,83 +563,83 @@ $('missedClear').addEventListener('click', () => (DEMO ? handlers.alarms(Object.
 $('ringStop').addEventListener('click', () => post('/api/alarms/stop'));
 $('ringSnooze').addEventListener('click', () => {
   if (DEMO) return post('/api/alarms/snooze');
-  postJson('/api/alarms/snooze').then(r => { if (r.ok) toast('好的，10 分钟后再叫你'); });   // postJson shows the error
+  postJson('/api/alarms/snooze').then(r => { if (r.ok) toast('OK, 10 more minutes'); });   // postJson shows the error
 });
 
 /* ---- settings: software update (update.py: the root updater installs, the page only asks) ---- */
-const UPD_STAGE = { preparing: '正在准备', downloading: '正在下载', installing: '正在安装',
-                    testing: '正在重启并自检', rolling_back: '自检没通过，正在退回' };
-let updArmed = 0;   // first tap on 更新 arms it, a second one within 5 s installs
+const UPD_STAGE = { preparing: 'Preparing', downloading: 'Downloading', installing: 'Installing',
+                    testing: 'Rebooting and checking', rolling_back: 'Check failed, rolling back' };
+let updArmed = 0;   // first tap on Update arms it, a second one within 5 s installs
 let updStarting = 0;   // request sent, the updater hasn't reported yet (it takes a few seconds to start)
 const mb = n => (n / 1048576).toFixed(n < 10485760 ? 1 : 0) + ' MB';
 function ago(t) {
   const m = Math.max(0, Math.round((Date.now() / 1000 - t) / 60));
-  return m < 2 ? '刚刚' : m < 60 ? `${m} 分钟前` : m < 1440 ? `${Math.round(m / 60)} 小时前` : `${Math.round(m / 1440)} 天前`;
+  return m < 2 ? 'just now' : m < 60 ? `${m} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`;
 }
 // After an update: the state it left, both versions, whatever this run installed. One tap installs
 // the system layer and then the client, and an older updater keeps only the last one's message
-// (已更新到 0.1.5); the versions themselves are always right.
+// (already updated to 0.1.5); the versions themselves are always right.
 function updDoneText(u, job) {
   const sys = (u || {}).system || {};
-  if (!sys.current || !ui.version) return job.message || '更新完成';
-  return `更新完成：系统层 ${sys.current} · 客户端 ${ui.version}`
-    + (/重启设备后生效/.test(job.message || '') ? '，部分改动重启设备后生效' : '');
+  if (!sys.current || !ui.version) return job.message || 'Update complete';
+  return `Updated: system ${sys.current} · client ${ui.version}`
+    + (/apply after reboot|重启设备后生效/.test(job.message || '') ? '; some changes apply after reboot' : '');
 }
 function updParts(u) {
   // what one tap installs, in the updater's order: the system layer (shell, audio...) first
   const parts = [], sys = u.system || {}, sa = sys.available;
-  if (sa && !(sa.missing || []).length) parts.push({ key: 'system', name: '系统层', ...sa });
-  if (u.available) parts.push({ key: 'client', name: '客户端', ...u.available });
+  if (sa && !(sa.missing || []).length) parts.push({ key: 'system', name: 'System', ...sa });
+  if (u.available) parts.push({ key: 'client', name: 'Client', ...u.available });
   return parts;
 }
 function renderUpdate() {
   const u = ui.update || {}, job = u.job || {}, sys = u.system || {};
   const parts = updParts(u), avail = parts.length > 0;
   const busy = job.state in UPD_STAGE;
-  // between the confirming tap and the updater's first report: don't show the 更新 button again
+  // between the confirming tap and the updater's first report: do not show the Update button again
   // (it looks like the tap missed). Ends when the updater reports (busy, or a result newer than the
   // tap) or after 30 s of silence.
   if (updStarting && (busy || (job.time || 0) * 1000 > updStarting - 2000 || Date.now() - updStarting > 30000)) updStarting = 0;
   const starting = !!updStarting;
   const recent = !!job.time && Date.now() / 1000 - job.time < 86400;
   const failed = !busy && recent && (job.state === 'failed' || job.state === 'rolled_back');
-  const cur = !ui.version ? '' : sys.current ? `客户端 ${ui.version} · 系统层 ${sys.current}` : `当前版本 ${ui.version}`;
+  const cur = !ui.version ? '' : sys.current ? `Client ${ui.version} · system ${sys.current}` : `Current ${ui.version}`;
   // a system layer this image can't take (it needs packages only a newer image has)
   const blocked = sys.available && (sys.available.missing || []).length
-    ? `系统层 ${sys.available.version} 要重刷新镜像才能装` : '';
-  let title = '软件更新', text, bad = false, label = '', notes = '';
-  if (!u.enabled) text = (cur ? cur + '。' : '') + '这台设备还没装更新服务';
+    ? `System ${sys.available.version} needs a reflash` : '';
+  let title = 'Software update', text, bad = false, label = '', notes = '';
+  if (!u.enabled) text = (cur ? cur + '。' : '') + 'Update service is not installed';
   else if (starting) {
-    title = '正在开始更新…';
-    text = '正在连接更新服务器，请稍等';
+    title = 'Starting update…';
+    text = 'Connecting to the update server';
   } else if (busy) {
-    const what = job.component === 'system' ? '系统层' : '客户端';
-    title = `正在更新${what} ${job.version}`;
+    const what = job.component === 'system' ? 'System' : 'Client';
+    title = `Updating ${what} ${job.version}`;
     const pct = job.state === 'downloading' && job.progress != null ? ` ${Math.round(job.progress * 100)}%` : '';
-    text = `${UPD_STAGE[job.state]}${pct}。` + (job.component === 'system' ? '屏幕可能会闪一下，' : '')
-      + '语音助手会暂停一会儿，请不要断电';
+    text = `${UPD_STAGE[job.state]}${pct}。` + (job.component === 'system' ? 'The screen may flash, ' : '')
+      + 'voice pauses; do not unplug';
   } else if (avail) {
-    title = '有新版本 ' + parts.map(p => `${p.name} ${p.version}`).join(' · ');
-    text = failed ? job.message + '。可以再试一次'
-      : `${cur}，下载约 ${mb(parts.reduce((n, p) => n + (p.size || 0), 0))}` + (blocked ? `。${blocked}` : '');
+    title = 'New version ' + parts.map(p => `${p.name} ${p.version}`).join(' · ');
+    text = failed ? job.message + '. You can try again'
+      : `${cur}, download about ${mb(parts.reduce((n, p) => n + (p.size || 0), 0))}` + (blocked ? `。${blocked}` : '');
     bad = failed;
     if (Date.now() - updArmed < 5000) {
       // waiting for the confirming tap: the hint stays on the card for those 5 s
       bad = false;
-      text = `更新时语音助手会停一会儿（约 ${parts.length > 1 ? 2 : 1} 分钟）`
-        + (parts.some(p => p.key === 'system') ? '，屏幕可能会闪一下' : '') + '。再点一下「确认更新」开始';
+      text = `Voice pauses during update (about ${parts.length > 1 ? 2 : 1} min)`
+        + (parts.some(p => p.key === 'system') ? ', screen may flash' : '') + '. Tap Confirm update again to start';
     }
     notes = parts.map(p => (parts.length > 1 ? `<li class="h">${p.name} ${esc(p.version)}</li>` : '')
                           + (p.notes || []).map(n => `<li>${esc(n)}</li>`).join('')).join('');
-    label = Date.now() - updArmed < 5000 ? '确认更新' : '更新';
+    label = Date.now() - updArmed < 5000 ? 'Confirm update' : 'Update';
   } else {
-    text = recent && job.state === 'done' ? `${updDoneText(u, job)}，已是最新`
+    text = recent && job.state === 'done' ? `${updDoneText(u, job)}, up to date`
       : failed ? job.message
       : u.check_error ? `${cur}。${u.check_error}`
       : blocked ? `${cur}。${blocked}`
-      : `${cur}，已是最新` + (u.checked ? `（${ago(u.checked)}检查过）` : '');
+      : `${cur}, up to date` + (u.checked ? ` (checked ${ago(u.checked)})` : '');
     bad = failed || (!!u.check_error && !(recent && job.state === 'done'));
-    label = '检查更新';
+    label = 'Check for updates';
   }
   $('gearDot').classList.toggle('on', avail && !busy && !starting);
   $('updTitle').textContent = title;
@@ -665,9 +665,9 @@ function updateFinished(job) {
 $('updBtn').addEventListener('click', async () => {
   const parts = updParts(ui.update || {});
   if (!parts.length) {
-    if (DEMO) return toast('正在检查更新…');
+    if (DEMO) return toast('Checking for updates…');
     const r = await (await post('/api/update/check'))?.json?.();
-    return toast(r && r.ok ? '正在检查更新…' : '这台设备还没装更新服务', r && r.ok ? '' : 'error');
+    return toast(r && r.ok ? 'Checking for updates…' : 'Update service is not installed', r && r.ok ? '' : 'error');
   }
   const sys = parts.find(p => p.key === 'system'), cli = parts.find(p => p.key === 'client');
   if (Date.now() - updArmed > 5000) {
@@ -684,78 +684,78 @@ $('updBtn').addEventListener('click', async () => {
   if (!r || !r.ok) {
     updStarting = 0;
     renderUpdate();
-    toast((r && r.error) || '没能开始更新', 'error');
+    toast((r && r.error) || 'Could not start update', 'error');
   }
 });
 if (DEMO !== null) {
   // ?demo&upd=new|sys|both|busy|failed: preview the update card (opens the settings sheet)
   const kind = new URLSearchParams(location.search).get('upd');
-  const avail = { version: '0.2.0', size: 9.4 * 1048576, notes: ['聊天页的光球加了表情', '修好了睡眠时段跨午夜时不生效'] };
-  const savail = { version: '0.3.0', size: 0.2 * 1048576, notes: ['设置页能切换 WiFi', '可以当蓝牙音箱'], missing: [] };
+  const avail = { version: '0.2.0', size: 9.4 * 1048576, notes: ['Chat orb now has a face', 'Fixed sleep hours that span midnight'] };
+  const savail = { version: '0.3.0', size: 0.2 * 1048576, notes: ['Settings can switch Wi‑Fi', 'Works as a Bluetooth speaker'], missing: [] };
   const now = Date.now() / 1000;
   ui.version = '0.1.0';
   ui.update = { enabled: true, checked: now - 3600, available: kind && kind !== 'sys' ? avail : null,
                 system: { current: '0.2.0', available: kind === 'sys' || kind === 'both' ? savail : null },
                 job: kind === 'busy' ? { state: 'downloading', version: '0.3.0', progress: .42, time: now, component: 'system' }
                    : kind === 'failed' ? { state: 'rolled_back', version: '0.3.0', time: now, component: 'system',
-                                           message: '系统层 0.3.0 没装成功（屏幕界面没有启动起来），已退回 0.2.0' } : null };
+                                           message: 'System 0.3.0 failed to start the screen UI and rolled back to 0.2.0' } : null };
   if (kind) $('settings').classList.add('on');
 }
 
 /* ---- settings: chat history (kept on the hub; clearing also clears the hub's copy) ---- */
 let clearArmed = 0, memArmed = 0;   // first tap arms a button, a second one within 5 s clears
 function renderClear() {
-  $('clearBtn').textContent = Date.now() - clearArmed < 5000 ? '确认清除' : '清除';
+  $('clearBtn').textContent = Date.now() - clearArmed < 5000 ? 'Confirm clear' : 'Clear';
   $('clearBtn').classList.toggle('armed', Date.now() - clearArmed < 5000);
-  $('clearMemBtn').textContent = Date.now() - memArmed < 5000 ? '确认只清除记忆' : '只清除记忆、保留记录';
+  $('clearMemBtn').textContent = Date.now() - memArmed < 5000 ? 'Confirm clear memory' : 'Clear memory only, keep history';
   $('clearMemBtn').classList.toggle('armed', Date.now() - memArmed < 5000);
 }
 function agentNote(r) {
   // Claude Code and Grok Bot keep their own context: clearing here doesn't touch it
-  return (r.agents || []).length ? `${r.agents.join('和')}自己那边的对话没有动` : '';
+  return (r.agents || []).length ? `${r.agents.join(' and ')} chats on their side were left alone` : '';
 }
 $('clearBtn').addEventListener('click', async () => {
   if (Date.now() - clearArmed > 5000) {
     clearArmed = Date.now();
     renderClear();
     setTimeout(renderClear, 5100);
-    return toast('清除后所有模型的聊天记录都会删掉，再点一下「确认清除」');
+    return toast('This deletes chat history for every model. Tap Confirm clear again.');
   }
   clearArmed = 0;
   renderClear();
-  if (DEMO !== null) { handlers.thread({ entry: ui.thread.entry, messages: [] }); return toast('聊天记录已清除'); }
+  if (DEMO !== null) { handlers.thread({ entry: ui.thread.entry, messages: [] }); return toast('Chat history cleared'); }
   const r = await (await post('/api/history/clear', {}))?.json?.();
-  if (!r || !r.ok) return toast((r && r.error) || '没能清除', 'error');
+  if (!r || !r.ok) return toast((r && r.error) || 'Could not clear', 'error');
   const note = agentNote(r);
-  toast('聊天记录已清除' + (note ? '。' + note : ''));
+  toast('Chat history cleared' + (note ? '。' + note : ''));
 });
 $('clearMemBtn').addEventListener('click', async () => {
   if (Date.now() - memArmed > 5000) {
     memArmed = Date.now();
     renderClear();
     setTimeout(renderClear, 5100);
-    return toast('模型会忘掉以前聊过的，聊天记录留着；再点一下「确认只清除记忆」');
+    return toast('The model forgets past chats; history stays. Tap Confirm clear memory again.');
   }
   memArmed = 0;
   renderClear();
-  if (DEMO !== null) return toast('记忆已清除，聊天记录还在');
+  if (DEMO !== null) return toast('Memory cleared; history kept');
   const r = await (await post('/api/history/clear', { memory_only: true }))?.json?.();
-  toast(r && r.ok ? '记忆已清除，聊天记录还在' : (r && r.error) || '没能清除', r && r.ok ? '' : 'error');
+  toast(r && r.ok ? 'Memory cleared; history kept' : (r && r.error) || 'Could not clear', r && r.ok ? '' : 'error');
 });
 renderClear();
 
-// The device's address, read each time the sheet opens (it can change with the WiFi)
+// The device address, read each time the sheet opens (it can change with the WiFi)
 async function renderIp() {
   let ip = DEMO !== null ? '192.168.1.23' : null;
   if (DEMO === null) {
     try { ip = (await (await fetch('/api/network')).json()).ip; } catch (e) { ip = null; }
   }
-  $('ipNum').textContent = ip || '未联网';
-  $('ipSub').textContent = ip ? `在同一网络的电脑上打开 http://${ip}:16688/admin 进网关后台` : '连上 WiFi 后这里显示设备的地址';
+  $('ipNum').textContent = ip || 'Offline';
+  $('ipSub').textContent = ip ? `On a computer on the same network, open http://${ip}:16688/admin for the hub console` : 'The device address shows here after Wi‑Fi connects';
 }
 $('btnSettings').addEventListener('click', () => { $('settings').classList.add('on'); renderIp(); renderWifiCard(); });
 /* ---- settings: WiFi (the kiosk shell scans and joins: thinksmart-kiosk.py, the same code as its welcome page) ---- */
-// The shell answers the client's page only on the device's own screen (127.0.0.1); window.thinksmartShell
+// The shell answers the client's page only on the device own screen (127.0.0.1); window.thinksmartShell
 // says it can. An older shell can't: the card then only says so.
 const shell = window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.thinksmart;
 const shellWifi = !!(shell && window.thinksmartShell && window.thinksmartShell.wifi);
@@ -788,7 +788,7 @@ function wifiMock(m) {
   else if (m.cmd === 'scan') reply({ ok: true, networks: [
     { ssid: 'Home_5G', signal: 82, secure: true, active: true, saved: true },
     { ssid: 'Home', signal: 70, secure: true, saved: true },
-    { ssid: '客厅的 WiFi', signal: 54, secure: true },
+    { ssid: 'Living-room Wi‑Fi', signal: 54, secure: true },
     { ssid: 'Guest', signal: 40, secure: false },
     { ssid: 'TP-LINK_8A2C', signal: 22, secure: true },
   ] }, 700);
@@ -799,23 +799,23 @@ function wifiMock(m) {
 }
 
 const WIFI_REASONS = {
-  password: '密码不对，请再试一次',
-  notfound: '找不到这个网络，可能离得太远或名称有误',
-  timeout: '连接超时，请靠近路由器后再试',
-  noreply: '设备没有回应，请过一会儿再看看网络状态',
+  password: 'Wrong password, try again',
+  notfound: 'Network not found; too far or wrong name',
+  timeout: 'Timed out; move closer to the router',
+  noreply: 'Device did not answer; check the network later',
 };
-const WIFI_STAGES = { scan: '正在搜索网络…', join: '正在连接路由器…', auth: '正在验证密码…', ip: '密码正确，正在获取网络地址…' };
+const WIFI_STAGES = { scan: 'Scanning…', join: 'Connecting to the router…', auth: 'Checking password…', ip: 'Password ok, getting an address…' };
 const wifi = { nets: [], target: null, ssid: '', pw: '', showPw: false, busy: false, connectId: null };
-const signalText = s => s > 75 ? '信号很好' : s > 50 ? '信号良好' : s > 25 ? '信号一般' : '信号较弱';
+const signalText = s => s > 75 ? 'Excellent signal' : s > 50 ? 'Good signal' : s > 25 ? 'Fair signal' : 'Weak signal';
 
 async function renderWifiCard() {
   if (!shellWifi && DEMO === null) {
-    $('wifiSub').textContent = '这台设备的系统层版本较旧，不能在这里切换 WiFi。在上面的「软件更新」里更新系统层后就可以。';
+    $('wifiSub').textContent = 'This system layer is too old to change Wi‑Fi here. Update it under Software update above.';
     $('wifiBtn').hidden = true;
     return;
   }
   const r = await shellCall('wifi_status');
-  $('wifiSub').textContent = !r.ok ? '读不到 WiFi 状态' : r.ssid ? `已连接 ${r.ssid} · ${signalText(r.signal)}` : '没有连接 WiFi';
+  $('wifiSub').textContent = !r.ok ? 'Cannot read Wi‑Fi status' : r.ssid ? `Connected ${r.ssid} · ${signalText(r.signal)}` : 'Not connected to Wi‑Fi';
 }
 function openWifi() {
   $('wifi').classList.add('on');
@@ -839,11 +839,11 @@ function wifiList() {
 }
 async function wifiScan() {
   $('wScan').classList.add('spin');
-  if (!wifi.nets.length) $('wNets').innerHTML = '<div class="w-empty">正在搜索附近的 WiFi…</div>';
+  if (!wifi.nets.length) $('wNets').innerHTML = '<div class="w-empty">Scanning nearby Wi‑Fi…</div>';
   const r = await shellCall('scan');
   $('wScan').classList.remove('spin');
   wifi.nets = r.ok ? r.networks : [];
-  renderNets(r.ok ? '' : '搜索失败，点右上角刷新再试');
+  renderNets(r.ok ? '' : 'Scan failed; tap refresh');
 }
 function bars(signal) {
   const lit = signal > 75 ? 4 : signal > 50 ? 3 : signal > 25 ? 2 : 1;
@@ -853,12 +853,12 @@ const LOCK = '<svg class="w-lock" width="20" height="20" viewBox="0 0 24 24" fil
 function renderNets(error) {
   const box = $('wNets');
   if (error || !wifi.nets.length) {
-    box.innerHTML = `<div class="w-empty">${esc(error || '附近没有搜到 WiFi')}</div>`;
+    box.innerHTML = `<div class="w-empty">${esc(error || 'No Wi‑Fi found nearby')}</div>`;
     return;
   }
   box.innerHTML = wifi.nets.map((n, i) =>
     `<button class="w-net${n.active ? ' cur' : ''}" data-i="${i}">${bars(n.signal)}<span class="name">${esc(n.ssid)}</span>` +
-    (n.active ? '<span class="meta">已连接</span>' : n.saved ? '<span class="meta saved">已保存</span>' : '') +
+    (n.active ? '<span class="meta">Connected</span>' : n.saved ? '<span class="meta saved">Saved</span>' : '') +
     (n.secure ? LOCK : '') + '</button>').join('');
 }
 $('wNets').addEventListener('click', e => {
@@ -867,7 +867,7 @@ $('wNets').addEventListener('click', e => {
 });
 
 // mode: 'type' (enter a password), 'saved' (a saved network: connect or forget), 'info' (the one
-// connected: forget). Saved networks wait for a tap on 连接 so 忘记 stays reachable.
+// connected: forget). Saved networks wait for a tap on Connect so Forget stays reachable.
 function wifiJoin(net, hidden) {
   wifi.target = { ssid: net ? net.ssid : '', secure: net ? net.secure : true, hidden, saved: !!(net && net.saved),
                   mode: net && net.active ? 'info' : net && net.saved ? 'saved' : 'type' };
@@ -875,11 +875,11 @@ function wifiJoin(net, hidden) {
   wifi.pw = '';
   wifi.showPw = false;
   const t = wifi.target, q = net ? signalText(net.signal) : '';
-  $('wJoinTitle').textContent = hidden ? '添加隐藏网络' : t.ssid;
-  $('wJoinHint').textContent = hidden ? '输入网络名称和密码（没有密码就留空），然后点键盘上的「连接」'
-    : t.mode === 'info' ? '已连接 · ' + q
-    : t.mode === 'saved' ? '已保存的网络 · ' + q + '，点「连接」用保存的密码连接'
-    : t.secure ? '加密网络 · ' + q + '，输入密码后点键盘上的「连接」' : '开放网络 · ' + q;
+  $('wJoinTitle').textContent = hidden ? 'Add hidden network' : t.ssid;
+  $('wJoinHint').textContent = hidden ? 'Enter the network name and password (leave password blank if none), then tap Connect on the keyboard'
+    : t.mode === 'info' ? 'Connected · ' + q
+    : t.mode === 'saved' ? 'Saved network · ' + q + ', tap Connect with the saved password'
+    : t.secure ? 'Secured · ' + q + ', enter the password then tap Connect' : 'Open · ' + q;
   wifiMsg('');
   wifiPane('wJoin');
   renderJoin();
@@ -905,9 +905,9 @@ function renderJoin() {
   if ($('wSsid').value !== wifi.ssid) $('wSsid').value = wifi.ssid;
   if ($('wPw').value !== wifi.pw) $('wPw').value = wifi.pw;
   $('wPw').type = wifi.showPw ? 'text' : 'password';
-  $('wPw').placeholder = t.hidden ? '没有密码就留空' : '至少 8 位';
+  $('wPw').placeholder = t.hidden ? 'Leave blank if no password' : 'At least 8 characters';
   $('wSsid').disabled = $('wPw').disabled = wifi.busy;
-  $('wEye').textContent = wifi.showPw ? '隐藏' : '显示';
+  $('wEye').textContent = wifi.showPw ? 'Hide' : 'Show';
   $('wFieldSsid').style.display = typing() && t.hidden ? '' : 'none';
   $('wFieldPw').style.display = typing() && t.secure ? '' : 'none';
   $('wForget').hidden = !(t.saved || t.mode === 'info');
@@ -924,7 +924,7 @@ async function wifiConnect() {
   wifi.busy = true;
   renderJoin();
   const usingSaved = t.mode === 'saved';
-  wifiMsg(usingSaved ? `正在用已保存的密码连接 ${wifi.ssid}…` : `正在连接 ${wifi.ssid}…`, 'wait');
+  wifiMsg(usingSaved ? `Connecting to ${wifi.ssid} with saved password…` : `Connecting to ${wifi.ssid}…`, 'wait');
   wifi.connectId = shellSeq + 1;   // the id shellCall() is about to use: progress reports carry it
   const r = await shellCall('connect', { ssid: wifi.ssid, password: usingSaved || !t.secure ? '' : wifi.pw, hidden: !!t.hidden });
   wifi.connectId = null;
@@ -932,7 +932,7 @@ async function wifiConnect() {
   if (r.ok) {
     t.mode = 'info';
     t.saved = true;
-    wifiMsg(`已连接 ${wifi.ssid}`, 'ok');
+    wifiMsg(`Connected ${wifi.ssid}`, 'ok');
     renderJoin();
     setTimeout(() => { if (!wifi.busy && $('wJoin').classList.contains('on')) { wifiList(); wifiScan(); } }, 1500);
     return;
@@ -940,8 +940,8 @@ async function wifiConnect() {
   // whatever went wrong (the shell already went back to the previous network), let the user type a password next
   if (t.secure) t.mode = 'type';
   if (r.reason === 'password') wifi.pw = '';
-  wifiMsg(usingSaved && r.reason === 'password' ? '保存的密码已失效，请重新输入'
-    : WIFI_REASONS[r.reason] || ('连接失败' + (r.detail ? '：' + r.detail : '')) + '，已连回原来的网络', 'bad');
+  wifiMsg(usingSaved && r.reason === 'password' ? 'Saved password failed; enter it again'
+    : WIFI_REASONS[r.reason] || ('Connection failed' + (r.detail ? '：' + r.detail : '')) + ', back on the previous network', 'bad');
   renderJoin();
   wifiFocus();
 }
@@ -952,16 +952,16 @@ async function wifiForget() {
   if (wifi.busy) return;
   const ssid = wifi.target.ssid;
   wifi.busy = true;
-  wifiMsg(`正在忘记 ${ssid}…`, 'wait');
+  wifiMsg(`Forgetting ${ssid}…`, 'wait');
   renderJoin();
   const r = await shellCall('forget', { ssid });
   wifi.busy = false;
   if (!r.ok) {
-    wifiMsg(`没能忘记 ${ssid}，请再试一次`, 'bad');
+    wifiMsg(`Could not forget ${ssid}; try again`, 'bad');
     return renderJoin();
   }
   wifi.target.saved = false;
-  wifiMsg(`已忘记 ${ssid}，下次连接需要重新输入密码`, 'ok');
+  wifiMsg(`Forgot ${ssid}; you will need the password next time`, 'ok');
   renderJoin();
   wifi.nets = wifi.nets.map(n => n.ssid === ssid ? Object.assign({}, n, { saved: false }) : n);
   setTimeout(() => { if (!wifi.busy) { wifiList(); wifiScan(); } }, 1400);
@@ -974,7 +974,7 @@ $('wBack').addEventListener('click', () => { if (!wifi.busy) wifiList(); });
 $('wForget').addEventListener('click', wifiForget);
 $('wJoinBtn').addEventListener('click', wifiConnect);
 // On pointerdown, not click: cancelling a touch's pointerdown (to keep the field focused and the system
-// keyboard up) makes WebKitGTK send no click at all, so a click handler never ran on the device's screen
+// keyboard up) makes WebKitGTK send no click at all, so a click handler never ran on the device screen
 // (a mouse in a desktop browser still clicks). The on-screen keyboard's keys work the same way.
 $('wEye').addEventListener('pointerdown', e => { e.preventDefault(); wifi.showPw = !wifi.showPw; renderJoin(); });
 $('wSsid').addEventListener('input', () => { wifi.ssid = $('wSsid').value; });
@@ -993,7 +993,7 @@ $('wPw').addEventListener('keydown', e => {
 /* ---- settings: Bluetooth speaker (bt.py; pairing only in the 3-minute "add a phone" window) ---- */
 function btPlaying(d) {
   const song = [d.title, d.artist].filter(Boolean).join(' · ');
-  return song || '正在播放';
+  return song || 'Now playing';
 }
 function renderBluetooth() {
   const b = ui.bluetooth;
@@ -1005,25 +1005,25 @@ function renderBluetooth() {
   $('btSwitch').setAttribute('aria-checked', String(on));
   $('btSwitch').disabled = !b.available;
   $('btCard').classList.toggle('off', !on);
-  $('btName').textContent = on && b.name ? `手机上显示为「${b.name}」` : '';
+  $('btName').textContent = on && b.name ? `Shows on phones as “${b.name}”` : '';
   let note;
-  if (!b.available) note = '找不到蓝牙，或者蓝牙服务没有运行。';
-  else if (!b.enabled) note = '打开后，手机可以把这台设备当蓝牙音箱放歌。';
-  else if (b.window) note = `正在等手机连接（还剩 ${b.window} 秒）：在手机的蓝牙设置里点「${b.name}」，配对不用输密码。`;
-  else note = '连过的手机在蓝牙设置里点一下就能再连上。放歌时说话或闹钟响，歌声会自动变小或暂停。';
-  if (on && b.direct) note += ' 注意：系统层版本较旧，手机的声音没经过客户端，放歌时很难唤醒。';
+  if (!b.available) note = 'Bluetooth missing or the service is not running.';
+  else if (!b.enabled) note = 'When on, a phone can use this device as a Bluetooth speaker.';
+  else if (b.window) note = `Waiting for a phone (${b.window}s left): tap “${b.name}” in phone Bluetooth settings. No PIN.`;
+  else note = 'Paired phones reconnect with one tap. Music ducks or pauses for talk or alarms.';
+  if (on && b.direct) note += ' Note: old system layer routes phone audio around the client, so wake-word while playing is hard.';
   $('btNote').textContent = note;
   const phones = b.devices || [];
   $('btList').innerHTML = phones.length ? phones.map(d =>
-    `<div class="al phone${d.streaming ? ' live' : ''}"><i>手机</i><div class="al-text"><b>${esc(d.name)}</b>` +
-    `<span${d.streaming ? ' class="live"' : ''}>${d.streaming ? esc(btPlaying(d)) : d.connected ? '已连接' : '已配对，没连着'}</span></div>` +
-    (btIsArmed(d.address) ? `<button class="al-del armed" data-addr="${esc(d.address)}">确认忘记</button></div>`
-                          : `<button class="al-del" data-addr="${esc(d.address)}">忘记</button></div>`)).join('')
-    : '<div class="alarm-empty">还没有连过的手机</div>';
+    `<div class="al phone${d.streaming ? ' live' : ''}"><i>Phone</i><div class="al-text"><b>${esc(d.name)}</b>` +
+    `<span${d.streaming ? ' class="live"' : ''}>${d.streaming ? esc(btPlaying(d)) : d.connected ? 'Connected' : 'Paired, not connected'}</span></div>` +
+    (btIsArmed(d.address) ? `<button class="al-del armed" data-addr="${esc(d.address)}">Confirm forget</button></div>`
+                          : `<button class="al-del" data-addr="${esc(d.address)}">Forget</button></div>`)).join('')
+    : '<div class="alarm-empty">No paired phones yet</div>';
   $('btAdd').classList.toggle('on', !!b.window);
-  $('btAdd').textContent = b.window ? `停止等待（${b.window} 秒）` : '＋ 添加手机';
+  $('btAdd').textContent = b.window ? `Stop waiting (${b.window}s)` : '+ Add phone';
 }
-// 「忘记」 needs a second tap within 4 s. Kept by address, not on the button: while 添加手机 waits
+// 「Forget」 needs a second tap within 4 s. Kept by address, not on the button: while Add phone waits
 // the list is redrawn every second (the countdown), which would drop a state kept on the DOM.
 let btArmed = null;   // {addr, until}
 const btIsArmed = addr => !!btArmed && btArmed.addr === addr && Date.now() < btArmed.until;
@@ -1050,14 +1050,14 @@ $('btList').addEventListener('click', e => {
     return;
   }
   btArmed = null;
-  btPost({ remove: b.dataset.addr }).then(r => { if (r && r.ok !== false) toast('已忘记，这台手机要重新配对才能连'); });
+  btPost({ remove: b.dataset.addr }).then(r => { if (r && r.ok !== false) toast('Forgot; pair this phone again'); });
 });
 
 
-// 关机: halts the system (it stays dark with the power cable in), so unplugging can't damage it
+// Power off: halts the system (it stays dark with the power cable in), so unplugging can't damage it
 let powerArmed = 0;
 function renderPower() {
-  $('powerBtn').textContent = Date.now() - powerArmed < 5000 ? '确认关机' : '关机';
+  $('powerBtn').textContent = Date.now() - powerArmed < 5000 ? 'Confirm power off' : 'Power off';
   $('powerBtn').classList.toggle('armed', Date.now() - powerArmed < 5000);
 }
 $('powerBtn').addEventListener('click', async () => {
@@ -1065,19 +1065,19 @@ $('powerBtn').addEventListener('click', async () => {
     powerArmed = Date.now();
     renderPower();
     setTimeout(renderPower, 5100);
-    return toast('关机后要拔掉电源，等 30 秒再插上才会开机，再点一下「确认关机」');
+    return toast('After shutdown, unplug, wait 30s, then plug back in. Tap Confirm power off again.');
   }
   powerArmed = 0;
   renderPower();
-  if (DEMO !== null) return toast('演示模式不会真的关机');
+  if (DEMO !== null) return toast('Demo mode will not shut down');
   const r = await (await post('/api/power-off', {}))?.json?.();
-  if (!r || !r.ok) toast((r && r.error) || '没能关机', 'error');
+  if (!r || !r.ok) toast((r && r.error) || 'Could not power off', 'error');
 });
 $('settingsClose').addEventListener('click', () => {
   $('settings').classList.remove('on');
   if (!DEMO) postJson('/api/alarm-tone', { stop: true });   // a tone being tried stops with the settings
 });
-$('reportPill').addEventListener('click', () => { post('/api/reports/play'); toast('马上念给你听'); });
+$('reportPill').addEventListener('click', () => { post('/api/reports/play'); toast('Playing it now'); });
 
 /* ---- right side: welcome screen or conversation ---- */
 // The welcome screen (clock) when idle with nothing going on: no messages yet, or the conversation
@@ -1098,9 +1098,9 @@ function entryModel(entry) {
 function renderHead() {
   const m = entryModel(ui.thread.entry);
   $('headLogo').src = logoSrc(m);
-  $('headTitle').textContent = m ? `与 ${m.label} 的对话` : '对话';
+  $('headTitle').textContent = m ? `Chat with ${m.label}` : 'Chat';
   const n = ui.thread.messages.length;
-  $('headMeta').textContent = n ? `${n} 条消息 · ${ui.status.connected ? '对话中' : '记录已保存'}` : '新对话';
+  $('headMeta').textContent = n ? `${n} messages · ${ui.status.connected ? 'in conversation' : 'saved'}` : 'New chat';
 }
 
 function fmtTime(t) {
@@ -1110,7 +1110,7 @@ function fmtTime(t) {
 
 // A reply grows sentence by sentence; the text just shows as it is (no per-sentence highlight)
 function fillMsg(el, m) {
-  const html = esc(m.text) + (m.interrupted ? '<span class="cut">已打断</span>' : '') + `<span class="ts">${fmtTime(m.time)}</span>`;
+  const html = esc(m.text) + (m.interrupted ? '<span class="cut">Stopped</span>' : '') + `<span class="ts">${fmtTime(m.time)}</span>`;
   if (m.role === 'bot') el.querySelector('.body').innerHTML = html;
   else el.innerHTML = html;
 }
@@ -1190,10 +1190,10 @@ function renderPending() {
   el.dataset.kind = kind;
   el.className = 'msg pending ' + kind;
   if (kind.startsWith('user')) {
-    el.innerHTML = `<span class="wave">${'<b></b>'.repeat(5)}</span>${kind === 'user recog' ? '正在识别…' : ui.ptt ? '说完松开' : '正在听…'}`;
+    el.innerHTML = `<span class="wave">${'<b></b>'.repeat(5)}</span>${kind === 'user recog' ? 'Recognizing…' : ui.ptt ? 'Release when done' : 'Listening…'}`;
   } else {
     el.innerHTML = `<img class="tile" src="${esc(logoSrc(entryModel(ui.thread.entry)))}" alt="">` +
-      `<div class="body"><span class="dots"><i></i><i></i><i></i></span><span class="label">正在思考</span></div>`;
+      `<div class="body"><span class="dots"><i></i><i></i><i></i></span><span class="label">Thinking</span></div>`;
   }
   $('messages').appendChild(el);
   scrollDown();
@@ -1284,7 +1284,7 @@ function post(path, body) {
   if (DEMO) return demo.action(path, body);
   const opts = { method: 'POST' };
   if (body) Object.assign(opts, { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  return fetch(path, opts).catch(() => toast('客户端没有响应', 'error'));
+  return fetch(path, opts).catch(() => toast('Client not responding', 'error'));
 }
 
 // Mic: a tap wakes (or interrupts a reply and listens); holding it is push-to-talk
@@ -1321,7 +1321,7 @@ $('btnMic').addEventListener('pointerup', release);
 $('btnMic').addEventListener('pointercancel', release);
 $('btnMic').addEventListener('pointerleave', () => { if (ui.ptt) release(); });
 $('btnAbort').addEventListener('click', () => post('/api/abort'));
-$('btnEnd').addEventListener('click', () => { post('/api/end'); toast('对话已结束，聊天记录已保存'); });
+$('btnEnd').addEventListener('click', () => { post('/api/end'); toast('Conversation ended; history saved'); });
 $('modelPill').addEventListener('click', () => openSheet(true));
 $('sheetClose').addEventListener('click', () => openSheet(false));
 document.addEventListener('contextmenu', e => e.preventDefault());
@@ -1341,12 +1341,12 @@ const demo = DEMO === null ? null : (() => {
   const options = [
     M('Claude', 'claude-sonnet-4-5', 'claude-color', 'Anthropic', 'claude'),
     M('DeepSeek', 'deepseek-chat', 'deepseek-color', 'DeepSeek', 'deepseek'),
-    M('通义千问', 'qwen-max', 'qwen-color', '阿里通义', 'qwen'),
-    M('豆包', 'doubao-1.5-pro', 'doubao-color', '字节豆包', 'doubao'),
+    M('Qwen', 'qwen-max', 'qwen-color', 'Alibaba Qwen', 'qwen'),
+    M('Doubao', 'doubao-1.5-pro', 'doubao-color', 'ByteDance Doubao', 'doubao'),
     M('Gemini', 'gemini-2.5-flash', 'gemini-color', 'Google', 'gemini'),
-    M('Kimi', 'kimi-k2', 'kimi-color', '月之暗面', 'kimi'),
+    M('Kimi', 'kimi-k2', 'kimi-color', 'Moonshot', 'kimi'),
     M('GPT', 'gpt-4.1', 'openai', 'OpenAI', 'openai'),
-    M('智谱 GLM', 'glm-4.6', 'zhipu-color', '智谱', 'glm'),
+    M('Zhipu GLM', 'glm-4.6', 'zhipu-color', 'Zhipu', 'glm'),
   ];
   let seq = 0, bot = null, timer = null, stopped = false;
   const threads = {};
@@ -1376,23 +1376,23 @@ const demo = DEMO === null ? null : (() => {
     handlers.level({ mic: v * .07, out: v * .17 });
   }, 100);
 
-  const tones = { coffee: '咖啡时光', morning: '晨曦', bright: '元气早晨', hop: '阳光小跳跃', marimba: '清晨木琴' };
+  const tones = { coffee: 'Coffee Time', morning: 'Dawn', bright: 'Bright Morning', hop: 'Sunny Hop', marimba: 'Morning Marimba' };
   const alarmsDemo = () => ({
     synced: true, volume: 70, tone: 'coffee', tones, ringing: null,
     items: [
-      { id: 3, kind: 'timer', type: '倒计时', label: '煮鸡蛋', at: now() + 271, repeat: '', snoozed: false },
-      { id: 1, kind: 'alarm', type: '闹钟', label: '起床', at: now() + 9 * 3600, repeat: '每个工作日（周一到周五）', snoozed: false },
-      { id: 2, kind: 'reminder', type: '提醒', label: '晾衣服', at: now() + 26 * 3600, repeat: '', snoozed: false, spoken: true },
+      { id: 3, kind: 'timer', type: 'Timer', label: 'Boil eggs', at: now() + 271, repeat: '', snoozed: false },
+      { id: 1, kind: 'alarm', type: 'Alarm', label: 'Wake up', at: now() + 9 * 3600, repeat: 'Weekdays (Mon–Fri)', snoozed: false },
+      { id: 2, kind: 'reminder', type: 'Reminder', label: 'Hang laundry', at: now() + 26 * 3600, repeat: '', snoozed: false, spoken: true },
     ],
-    missed: [{ kind: 'reminder', label: '吃药', at: now() - 3 * 3600, why: 'unanswered', noted: now() - 3 * 3600 },
-             { kind: 'alarm', label: '起床', at: now() - 20 * 3600, why: 'off', noted: now() - 20 * 3600 }],
+    missed: [{ kind: 'reminder', label: 'Take medicine', at: now() - 3 * 3600, why: 'unanswered', noted: now() - 3 * 3600 },
+             { kind: 'alarm', label: 'Wake up', at: now() - 20 * 3600, why: 'off', noted: now() - 20 * 3600 }],
   });
   const steps = [
     ['idle', 4000, () => {
       handlers.snapshot({ status: { state: 'idle', connected: false, uploading: false, volume: 60 }, alarms: alarmsDemo(),
                           bluetooth: { available: true, enabled: true, powered: true, window: 0, name: 'ThinkSmart View', direct: false,
-                                       devices: [{ address: 'AA:BB:CC:DD:EE:01', name: '小张的 iPhone', paired: true, connected: true, streaming: true,
-                                                   title: '晴天', artist: '周杰伦' },
+                                       devices: [{ address: 'AA:BB:CC:DD:EE:01', name: 'Zhang iPhone', paired: true, connected: true, streaming: true,
+                                                   title: 'Sunny Day', artist: 'Jay Chou' },
                                                  { address: 'AA:BB:CC:DD:EE:02', name: 'Redmi K70', paired: true, connected: false, streaming: false }] },
                           models: { current: options[0], options }, thread: { entry: options[0].entry, messages: [] } });
     }],
@@ -1403,33 +1403,33 @@ const demo = DEMO === null ? null : (() => {
     [null, 300, () => handlers.alarms(alarmsDemo())],
     ['connecting', 1600, () => state('connecting', false)],
     ['listening', 3200, () => state('listening')],
-    [null, 500, () => say('user', '明天北京天气怎么样？适合去爬山吗？')],
+    [null, 500, () => say('user', 'What will the weather in Beijing be like tomorrow? Good for a hike?')],
     ['thinking', 2600, () => state('thinking')],
-    [null, 1700, () => sentence('明天北京晴转多云，气温 9 到 19 度，')],
-    [null, 1700, () => sentence('北风二三级，空气质量良。')],
-    ['speaking', 2200, () => sentence('这样的天气很适合去爬山，香山的红叶正是最好看的时候。')],
-    [null, 2400, () => sentence('早晚温差比较大，记得带一件薄外套。')],
+    [null, 1700, () => sentence('Beijing tomorrow: sunny to cloudy, 9–19°C, ')],
+    [null, 1700, () => sentence('light north wind, air quality good.')],
+    ['speaking', 2200, () => sentence('Great hiking weather - Xiangshan maples should be at their peak.')],
+    [null, 2400, () => sentence('Mornings and evenings are cooler; bring a light jacket.')],
     [null, 2600, () => { done(); state('listening'); }],
-    [null, 500, () => say('user', '那推荐一条人少一点的路线吧')],
+    [null, 500, () => say('user', 'Suggest a quieter trail then')],
     [null, 2000, () => state('thinking')],
-    [null, 1800, () => sentence('可以试试从北京植物园进山，走樱桃沟到鬼笑石，')],
-    ['chat', 2400, () => sentence('人比东门少很多，沿途还有溪水和水杉林。')],
+    [null, 1800, () => sentence('Try entering via the Beijing Botanical Garden, Cherry Valley to Guixiaoshi. ')],
+    ['chat', 2400, () => sentence('Fewer people than the east gate, with a creek and metasequoia along the way.')],
     ['cut', 1400, () => { done(true); state('idle'); }],
     ['models', 3200, () => openSheet(true)],
     [null, 600, () => switchTo(options[1])],
     ['volume', 2400, () => showVolume(60)],
     ['ptt', 2600, () => { pttStart(); state('listening'); }],
-    [null, 400, () => { pttEnd(); say('user', '用一句话介绍一下你自己'); state('thinking'); }],
-    [null, 1800, () => sentence('我是小麦，住在这块屏幕里的语音助手，有问题随时叫我。')],
+    [null, 400, () => { pttEnd(); say('user', 'Introduce yourself in one sentence'); state('thinking'); }],
+    [null, 1800, () => sentence('I am Xiaomai, the voice assistant on this screen. Call me anytime.')],
     [null, 3200, () => { done(); state('idle'); }],
-    [null, 3000, () => { state('idle', false); toast('对话已结束，聊天记录已保存'); }],
+    [null, 3000, () => { state('idle', false); toast('Conversation ended; history saved'); }],
   ];
 
   function switchTo(m) {
     openSheet(false);
     handlers.model({ current: m, options });
     handlers.thread({ entry: m.entry, messages: (threads[m.entry] || []).slice() });
-    toast(`已切换到 ${m.label}`);
+    toast(`Switched to ${m.label}`);
   }
 
   function run(i, jump) {
@@ -1450,13 +1450,13 @@ const demo = DEMO === null ? null : (() => {
       say('user', q);
       state('thinking');
       timer = setTimeout(() => {
-        sentence('这是演示模式，');
-        timer = setTimeout(() => { sentence('真正的回答要连上客户端才有哦。'); timer = setTimeout(() => { done(); state('idle'); }, 2600); }, 1500);
+        sentence('This is demo mode. ');
+        timer = setTimeout(() => { sentence('Real answers need the live client.'); timer = setTimeout(() => { done(); state('idle'); }, 2600); }, 1500);
       }, 1600);
     };
     if (path === '/api/wake') state('listening');
     else if (path === '/api/ptt/start') state('listening');
-    else if (path === '/api/ptt/stop') answer('（按住说话的内容）');
+    else if (path === '/api/ptt/stop') answer('(hold-to-talk text)');
     else if (path === '/api/text') answer(body.text);
     else if (path === '/api/abort') { done(true); state('idle'); }
     else if (path === '/api/end') { done(); state('idle', false); }
