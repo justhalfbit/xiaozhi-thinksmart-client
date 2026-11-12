@@ -1,7 +1,7 @@
 // ThinkSmart voice client page: renders what the client streams on /events and sends the buttons back.
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-const WEEK = '日一二三四五六';
+const WEEK = 'SMTWTFS';
 
 const ui = {
   status: { state: 'idle', connected: false, uploading: false },
@@ -14,13 +14,13 @@ const ui = {
 function tick() {
   const now = new Date();
   $('time').textContent = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
-  $('date').textContent = `${now.getMonth() + 1}月${now.getDate()}日 星期${WEEK[now.getDay()]}`;
+  $('date').textContent = `${now.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}`;
 }
 
 /* ---- status: orb colour, title, hint, buttons ---- */
 function modelName() {
   const cur = ui.models.current;
-  return cur ? cur.label : '模型';
+  return cur ? cur.label : 'Model';
 }
 
 function renderStatus() {
@@ -28,11 +28,11 @@ function renderStatus() {
   const shown = ui.ptt ? 'listening' : state;
   document.body.dataset.state = shown;
   const text = {
-    idle: ['说<em>「小麦小麦」</em>', connected ? '对话还保留着，唤醒后可以接着聊' : '或者点下面的麦克风；按住可以直接说'],
-    connecting: ['正在连接…', '连上小智网关后就开始听'],
-    listening: ui.ptt ? ['松开发送', '说完松开手指'] : ['我在听', '说完停一下我就开始回答'],
-    thinking: [`${esc(modelName())} 正在思考…`, '复杂的问题可能要想一会儿'],
-    speaking: ['正在回答', '随时开口就能打断我'],
+    idle: ['Say <em>“Xiaomai Xiaomai”</em>', connected ? 'Chat is kept; wake to continue' : 'Or tap the mic below; hold to talk'],
+    connecting: ['Connecting…', 'Listening starts once the Xiaozhi hub is connected'],
+    listening: ui.ptt ? ['Release to send', 'Release when finished'] : ['I am listening', 'Pause when you finish and I will answer'],
+    thinking: [`${esc(modelName())} is thinking…`, 'Harder questions may take a moment'],
+    speaking: ['Speaking', 'Speak anytime to interrupt'],
   }[shown] || ['', ''];
   $('title').innerHTML = text[0];
   $('hint').textContent = text[1];
@@ -40,7 +40,7 @@ function renderStatus() {
   $('btnEnd').disabled = !connected;
   const link = $('link');
   link.classList.toggle('on', connected);
-  link.querySelector('span').textContent = connected ? '对话中' : '待机';
+  link.querySelector('span').textContent = connected ? 'In conversation' : 'Idle';
   if (!['listening', 'speaking'].includes(shown)) document.body.style.setProperty('--lvl', 0);
 }
 
@@ -65,10 +65,10 @@ async function switchModel(m) {
   try {
     const r = await (await fetch('/api/model', { method: 'POST', headers: { 'Content-Type': 'application/json' },
                                                  body: JSON.stringify({ kind: m.kind, vendor: m.vendor, entry: m.entry }) })).json();
-    if (r.ok === false) toast(r.error || '切换失败', 'error');
-    else toast(`已切换到 ${m.label}`);
+    if (r.ok === false) toast(r.error || 'Switch failed', 'error');
+    else toast(`Switched to ${m.label}`);
   } catch (e) {
-    toast('切换失败：客户端没有响应', 'error');
+    toast('Switch failed: client not responding', 'error');
   }
 }
 
@@ -80,9 +80,9 @@ function entryModel(entry) {
 function renderChatHead() {
   const m = entryModel(ui.thread.entry);
   $('chatLogo').src = m && m.logo ? `/static/logos/${m.logo}.svg` : '';
-  $('chatTitle').textContent = m ? `与 ${m.label} 的对话` : '对话';
+  $('chatTitle').textContent = m ? `Chat with ${m.label}` : 'Chat';
   const n = ui.thread.messages.length;
-  $('chatSub').textContent = n ? `${n} 条消息 · ${ui.status.connected ? '上下文保持中' : '已结束'}` : '新对话';
+  $('chatSub').textContent = n ? `${n} messages · ${ui.status.connected ? 'context kept' : 'ended'}` : 'New chat';
 }
 
 function fmtTime(t) {
@@ -91,17 +91,17 @@ function fmtTime(t) {
 }
 
 function msgHtml(m) {
-  return esc(m.text) + (m.interrupted ? '<span class="cut">已打断</span>' : '') + `<span class="ts">${fmtTime(m.time)}</span>`;
+  return esc(m.text) + (m.interrupted ? '<span class="cut">Stopped</span>' : '') + `<span class="ts">${fmtTime(m.time)}</span>`;
 }
 
 function renderThread() {
   const box = $('messages');
   box.textContent = '';
   if (!ui.thread.messages.length) {
-    box.innerHTML = `<div class="empty"><div class="big">说「小麦小麦」开始聊天</div><div class="tips">
-      <div class="tip">「今天北京天气怎么样？」</div>
-      <div class="tip">「嗨 Claude，帮我想个周末计划」</div>
-      <div class="tip">「把音量调小一点」</div></div></div>`;
+    box.innerHTML = `<div class="empty"><div class="big">Say “Xiaomai Xiaomai” to start</div><div class="tips">
+      <div class="tip">“What’s the weather in Beijing today?”</div>
+      <div class="tip">“Hey Claude, help me plan the weekend”</div>
+      <div class="tip">「Turn the volume down a bit」</div></div></div>`;
   } else {
     for (const m of ui.thread.messages) box.appendChild(msgEl(m));
   }
@@ -186,7 +186,7 @@ function connectEvents() {
 }
 
 /* ---- buttons ---- */
-const post = path => fetch(path, { method: 'POST' }).catch(() => toast('客户端没有响应', 'error'));
+const post = path => fetch(path, { method: 'POST' }).catch(() => toast('Client not responding', 'error'));
 
 // Mic: a tap wakes (or interrupts a reply and listens); holding it is push-to-talk
 let holdTimer = null;
@@ -216,7 +216,7 @@ $('btnMic').addEventListener('pointerup', release);
 $('btnMic').addEventListener('pointercancel', release);
 $('btnMic').addEventListener('pointerleave', () => { if (ui.ptt) release(); });
 $('btnAbort').addEventListener('click', () => post('/api/abort'));
-$('btnEnd').addEventListener('click', () => { post('/api/end'); toast('对话已结束，聊天记录已保存'); });
+$('btnEnd').addEventListener('click', () => { post('/api/end'); toast('Conversation ended; history saved'); });
 document.addEventListener('contextmenu', e => e.preventDefault());
 
 tick();
