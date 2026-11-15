@@ -176,6 +176,14 @@
       <div class="bright-head"><b class="sub">铃声</b><span class="bright-num">点一下试听</span></div>
       <div class="minutes tones" id="tones"></div>
     </div>
+    <div class="alarms-card" id="tasksCard">
+      <div class="bright-head"><b>动态任务</b><span class="bright-num" id="taskCount"></span></div>
+      <p class="opt-note">到点查询或生成新内容，再播报一次。可说「每天早上 7 点播报杭州当天的天气」。取快递等固定提醒仍在上方。</p>
+      <div class="alarm-list" id="taskList"></div>
+      <button class="upd-btn" id="taskStop" hidden>停止本次执行</button>
+      <div class="bright-head"><b class="sub">最近执行</b></div>
+      <div id="taskRuns" aria-live="polite"></div>
+    </div>
     <div class="opt">
       <div class="opt-text">
         <b>自动熄屏</b>
