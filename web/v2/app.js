@@ -14,6 +14,7 @@ const ui = {
   ptt: false,
   alarms: { synced: true, items: [], missed: [], ringing: null, volume: 70, tone: 'coffee', tones: {} },
   bluetooth: null,
+  tasks: { items: [], runs: [] },
 };
 
 const SUGGEST = [
@@ -467,6 +468,32 @@ const renderVol = slider('volRange', 'volNum', () => ui.status.volume,
 const renderAlarmVol = slider('alarmVolRange', 'alarmVolNum', () => ui.alarms.volume,
   v => (DEMO ? (ui.alarms.volume = v) : postJson('/api/alarm-volume', { volume: v })));
 
+/* ---- scheduled queries, independent of fixed reminder clips ---- */
+const TASK_STATUS = { running: '正在查询', ready: '等待播报', speaking: '准备或正在播报', completed: '已完成', failed: '失败', cancelled: '已停止', interrupted: '重启中断', missed: '已错过' };
+function renderTasks() {
+  const t = ui.tasks;
+  $('taskCount').textContent = t.items.length ? `${t.items.length} 项` : '';
+  $('taskList').innerHTML = t.error ? `<p class="opt-note">${esc(t.error)}</p>` : t.items.map(v =>
+    `<div class="al task-row"><div class="al-text"><b>${esc(v.label)}</b><p class="opt-note">${esc(v.when)} ${esc(v.repeat_text || '')}</p><p class="opt-note">${esc(v.instruction)}</p></div><button class="al-del task-del" data-id="${Number(v.id)}">删除</button></div>`).join('') || '<p class="opt-note">暂无动态任务，可用语音创建</p>';
+  $('taskStop').hidden = !t.runs.some(r => ['running', 'ready', 'speaking'].includes(r.status));
+  $('taskRuns').innerHTML = t.runs.slice(0, 10).map(r => {
+    const links = (r.sources || []).filter(s => /^https?:\/\//.test(s.url)).map(s => `<a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.title || '来源')}</a>`).join(' · ');
+    return `<p class="opt-note"><b>${esc(r.label)} · ${esc(TASK_STATUS[r.status] || r.status)}</b> · ${esc(new Date(r.started_at * 1000).toLocaleString())}<br>${esc(r.error || r.text || '')}${links ? '<br>' + links : ''}</p>`;
+  }).join('') || '<p class="opt-note">尚无执行记录</p>';
+  renderUpcoming();
+}
+$('taskList').addEventListener('click', e => {
+  const b = e.target.closest('.task-del');
+  if (!b) return;
+  if (!b.classList.contains('armed')) {
+    b.classList.add('armed'); b.textContent = '确认删除';
+    setTimeout(() => { b.classList.remove('armed'); b.textContent = '删除'; }, 4000);
+    return;
+  }
+  postJson('/api/tasks/delete', { id: Number(b.dataset.id) }).then(r => { if (r.ok) toast('已删除动态任务'); });
+});
+$('taskStop').addEventListener('click', () => postJson('/api/tasks/stop'));
+
 /* ---- countdowns, alarms and reminders (alarms.py: the client keeps and rings them) ---- */
 const KIND_ICON = { timer: '计时', alarm: '闹钟', reminder: '提醒' };
 const now_s = () => Date.now() / 1000;
@@ -496,18 +523,32 @@ function alarmRow(v) {
   if (v.kind === 'reminder') sub.push(v.spoken ? '到点念出来' : v.spoken === false ? '只响铃（没合成出语音）' : '正在合成语音');
   return [`${hhmm(v.at)}${v.label ? ' ' + esc(v.label) : ''}`, sub.join(' · ')];
 }
+// Both stores feed the home clock. Task events must update it without resetting settings controls.
+function renderUpcoming() {
+  const a = ui.alarms, t = ui.tasks;
+  const timers = a.items.filter(v => v.kind === 'timer').slice(0, 3);
+  const pending = [
+    ...a.items.filter(v => v.kind !== 'timer').map(v => ({ ...v, task: false })),
+    ...t.items.filter(v => Number.isFinite(v.at) && v.at > 0).map(v => ({ ...v, task: true })),
+  ].sort((x, y) => x.at - y.at).slice(0, 3);
+  const chips = timers.map(v => `<div class="na timer">倒计时 <b data-left="${v.at}">${left(v.at)}</b>${v.label ? esc(v.label) : ''}</div>`);
+  for (const r of t.runs.filter(r => ['running', 'ready', 'speaking'].includes(r.status))) {
+    chips.push(`<div class="na task"><b>${esc(TASK_STATUS[r.status])}</b><span class="na-label">${esc(r.label)}</span></div>`);
+  }
+  for (const v of pending) {
+    chips.push(v.task ? `<div class="na task" data-task-id="${Number(v.id)}">任务 <b>${dayText(v.at)} ${hhmm(v.at)}</b><span class="na-label">${esc(v.label)}</span>${v.repeat_text ? `<small>${esc(v.repeat_text)}</small>` : ''}</div>` :
+      `<div class="na">${KIND_ICON[v.kind]} <b>${dayText(v.at)} ${hhmm(v.at)}</b>${esc(v.label || '')}</div>`);
+  }
+  if (!a.synced && (a.items.length || t.items.some(v => Number.isFinite(v.at)))) chips.unshift('<div class="na paused">时间未同步，定时提醒与任务暂停</div>');
+  $('nextAlarms').innerHTML = chips.join('');
+}
+
 function renderAlarms() {
   const a = ui.alarms;
   document.body.classList.toggle('alarms-paused', !a.synced);
   document.body.classList.toggle('ringing', !!a.ringing);
   document.body.classList.toggle('has-timer', a.items.some(v => v.kind === 'timer'));
-  // home: the running countdowns and the next alarm or reminder
-  const timers = a.items.filter(v => v.kind === 'timer').slice(0, 3);
-  const next = a.items.find(v => v.kind !== 'timer');
-  const chips = timers.map(v => `<div class="na timer">倒计时 <b data-left="${v.at}">${left(v.at)}</b>${v.label ? esc(v.label) : ''}</div>`);
-  if (next) chips.push(`<div class="na">${KIND_ICON[next.kind]} <b>${dayText(next.at)} ${hhmm(next.at)}</b>${esc(next.label || '')}</div>`);
-  if (!a.synced && a.items.length) chips.unshift('<div class="na paused">时间未同步，闹钟暂停</div>');
-  $('nextAlarms').innerHTML = chips.join('');
+  renderUpcoming();
   // settings: the list, the tones, the missed ones
   $('alarmCount').textContent = a.items.length ? `${a.items.length} 条` : '';
   $('alarmList').innerHTML = a.items.length ? a.items.map(v => {
@@ -1229,6 +1270,8 @@ const handlers = {
     seenThreads[s.thread.entry] = s.thread.messages;
     if (s.update) { ui.version = s.version; ui.update = s.update; }   // the demo's snapshots have none
     if (s.alarms) ui.alarms = s.alarms;
+    if (s.tasks) ui.tasks = s.tasks;
+    renderTasks();
     if (s.bluetooth) ui.bluetooth = s.bluetooth;
     renderModels(); renderThread(); renderStatus(); renderAlarms(); renderBluetooth();
     updateFinished((s.update || {}).job);
@@ -1263,6 +1306,7 @@ const handlers = {
     if (!v.ring) { ui.status.volume = v.volume; renderVol(); }
     if (v.source !== 'page') showVolume(v.volume);
   },
+  tasks(t) { ui.tasks = t; renderTasks(); },
   alarms(a) {
     ui.alarms = a; renderAlarms();
   },

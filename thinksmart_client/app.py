@@ -42,7 +42,7 @@ from pathlib import Path
 import aiohttp
 import numpy as np
 
-from . import alarms, bt, config, mcp, sleep, update, wake_verify
+from . import alarms, bt, config, mcp, sleep, update, wake_verify, tasks
 from .audio import OUT_RATE, Audio, load_wav
 from .device import DIM_LEVEL, Keys, Screen, normalize_screen_off
 from .hub import Hub
@@ -248,6 +248,9 @@ class Client:
         self.volume_lock = asyncio.Lock()   # one change of the speaker's volume at a time
         self.held_volume = None       # a ring or a tone preview has the speaker: the device volume to put back
         self.alarms = alarms.Alarms()
+        self.task_speaking = False
+        self.tasks = tasks.Runner(tasks.Store(), self._execute_task, self._speak_task, self._task_busy,
+                                  lambda view: self.events.publish('tasks', view), cancel=self._cancel_task)
         self.clock_ok = False         # the system clock is synchronised: alarms are judged
         self.ring = None              # the ring going on: {'items', 'notes', 'started', 'volume', 'stop', 'task'}
         self.preview = None           # task playing a ring tone from the settings
@@ -273,6 +276,7 @@ class Client:
         asyncio.create_task(self._model_poller())
         asyncio.create_task(self._report_poller())
         asyncio.create_task(self._alarm_loop())
+        asyncio.create_task(self.tasks.loop())
         await self.bt.start()
         asyncio.create_task(self._bluetooth_loop())
 
@@ -356,7 +360,7 @@ class Client:
                 'hub': self.hub_seen > 0 and time.monotonic() - self.hub_seen < 30}
 
     def snapshot(self):
-        return {'status': self.status(), 'models': self.models, 'alarms': self.alarm_view(), 'bluetooth': self.bt.view(),
+        return {'status': self.status(), 'models': self.models, 'alarms': self.alarm_view(), 'bluetooth': self.bt.view(), 'tasks': self.tasks.store.view(),
                 'thread': {'entry': self.view_entry(), 'messages': self.threads.get(self.view_entry(), [])}}
 
     def view_entry(self):
@@ -429,6 +433,7 @@ class Client:
 
     async def wake(self, source='button', chimed=False):
         self.screen.poke()
+        if hasattr(self, 'tasks'): await self.tasks.stop()
         if self.ring:
             await self.stop_alarm()   # the wake word stops a ring (no snooze: "再睡 10 分钟" is said next)
         if self.preview:
@@ -510,6 +515,7 @@ class Client:
         text = (text or '').strip()
         if not text:
             return
+        if hasattr(self, 'tasks'): await self.tasks.stop()
         if self.in_turn():
             await self.abort()
         if not await self.ensure_connected():
@@ -1121,6 +1127,7 @@ class Client:
         self.preview = asyncio.create_task(self._play_preview(name, previous))
 
     async def _play_preview(self, name, previous=None):
+        if hasattr(self, 'tasks'): await self.tasks.stop()
         if previous and not previous.done():
             await asyncio.wait([previous])   # not `await previous`: a cancel of this one must still stop it
         sound = alarms.tone(name)
@@ -1158,7 +1165,7 @@ class Client:
         talking (from the wake to the end of the reply) or a local sound plays, else full."""
         # a preview that played to its end stays in self.preview (finished) until the next one:
         # only one still playing mutes the phone
-        if self.ring or (self.preview and not self.preview.done()):
+        if self.ring or getattr(self, 'task_speaking', False) or (self.preview and not self.preview.done()):
             return 0.0
         if self.state != 'idle' or self.audio.player.buffered() > 0:
             return BACKGROUND_DUCKED
@@ -1299,6 +1306,7 @@ class Client:
             self.publish_alarms()
 
     async def _ringing(self, ring):
+        if hasattr(self, 'tasks'): await self.tasks.stop()
         answered = False
         log.info('ringing: %s%s', [(i['id'], i['kind'], i['label']) for i in ring['items']],
                  f" ({'；'.join(ring['notes'])})" if ring['notes'] else '')
@@ -1386,10 +1394,80 @@ class Client:
         for its next time)."""
         ring = self.ring
         if not ring:
-            return False
+            return await self.tasks.stop() if hasattr(self, 'tasks') else False
         ring['stop'].set()
         await asyncio.shield(ring['task'])
         return True
+
+    def _task_busy(self):
+        return (self.state != 'idle' or self.uploading or getattr(self, 'sleeping', False) or self.ring is not None
+                or self.preview is not None and not self.preview.done() or self.audio.player.buffered() > .03)
+
+    async def create_task(self, **args):
+        if not alarms.clock_synced():
+            raise ValueError('设备时间尚未同步，请稍后再试')
+        result = self.tasks.store.create(**args)
+        self.tasks.publish()
+        return result
+
+    async def _execute_task(self, item):
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=123)) as session:
+            async with session.post(self.cfg['hub_http'] + '/kiosk/tasks/run', json={
+                'device': self.cfg['device_id'], 'run_id': item['run_id'],
+                'instruction': item['instruction'], 'tools': item['tools']}) as response:
+                if response.status == 404: raise ValueError('网关尚不支持动态任务，请先更新网关')
+                try: result = await response.json()
+                except ValueError: raise ValueError('网关任务接口返回异常') from None
+                if response.status != 200:
+                    raise ValueError(result.get('error') or '网关任务执行失败')
+                return result
+
+    async def _cancel_task(self, run_id):
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=2)) as session:
+            async with session.post(self.cfg['hub_http'] + '/kiosk/tasks/cancel', json={
+                    'device': self.cfg['device_id'], 'run_id': run_id}) as response:
+                await response.read()
+
+    async def _speak_task(self, text):
+        chunks = tasks.speech_chunks(text)
+        if not chunks: raise ValueError('本次任务没有可播报内容')
+        wav = await self._speech(chunks[0])
+        if not wav: raise ValueError('本次任务语音合成失败，文字结果已保留')
+        deadline = time.monotonic() + 600
+        while self._task_busy():
+            if time.monotonic() > deadline: raise ValueError('等待播报超时，文字结果已保留')
+            await asyncio.sleep(.2)
+        self.task_speaking = True
+        self.screen.alarm(True)
+        pending = None
+        try:
+            await self._hold_speaker(self.alarm_volume)
+            for index, _chunk in enumerate(chunks):
+                if index:
+                    wav = await pending
+                    pending = None
+                sounds = self._clip_sound(wav)
+                if not sounds: raise ValueError('本次任务语音合成失败，文字结果已保留')
+                # One segment ahead only: bounded memory, and stopping cancels the pending HTTP call.
+                if index + 1 < len(chunks):
+                    pending = asyncio.create_task(self._speech(chunks[index + 1]))
+                sound = np.concatenate(sounds)
+                self.audio.player.push(sound)
+                deadline = time.monotonic() + len(sound) / OUT_RATE + 10
+                while self.audio.player.buffered() > .01:
+                    if time.monotonic() > deadline: raise ValueError('音频播放超时，文字结果已保留')
+                    await asyncio.sleep(.05)
+        finally:
+            if pending is not None:
+                pending.cancel()
+                try: await pending
+                except (asyncio.CancelledError, Exception): pass
+            self.audio.player.trim(0)
+            try:
+                await self._release_speaker()
+            finally:
+                self.screen.alarm(False)
+                self.task_speaking = False
 
     # ---- models (the hub's local-only /kiosk/llm endpoints) ----
 

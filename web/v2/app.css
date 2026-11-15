@@ -451,3 +451,13 @@ body[data-state="listening"] .mic-ring { opacity: .75; }
 .w-msg.bad { color: var(--bad); } .w-msg.ok { color: var(--ok); }
 .w-spin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid #ffffff22; border-top-color: var(--accent2); animation: wspin .8s linear infinite; }
 .w-actions { display: flex; gap: 16px; }
+
+/* Scheduled queries share the reminder card while keeping long instructions readable. */
+.task-row .al-text b { white-space: normal; }
+.task-row .opt-note { margin: 0; overflow-wrap: anywhere; }
+#taskRuns .opt-note { overflow-wrap: anywhere; }
+
+.na.task { max-width: 100%; min-height: 48px; height: auto; padding-top: 8px; padding-bottom: 8px; flex-wrap: wrap; row-gap: 4px; }
+.na.task b { white-space: nowrap; }
+.na.task .na-label { min-width: 0; overflow-wrap: anywhere; }
+.na.task small { font-size: 16px; color: var(--ink3); }

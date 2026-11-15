@@ -114,6 +114,16 @@ def make_app(client: Client):
             return web.json_response({'ok': False, 'error': str(e)}, status=400)
         return web.json_response({'ok': True})
 
+    async def task_delete(request):
+        try:
+            body = await request.json()
+            return web.json_response({'ok': await client.tasks.remove(int(body['id']))})
+        except (ValueError, TypeError, KeyError):
+            return web.json_response({'ok': False, 'error': '任务 id 不正确'}, status=400)
+
+    async def task_stop(_request):
+        return web.json_response({'ok': True, 'stopped': await client.tasks.stop()})
+
     async def alarm_delete(request):
         body = await request.json()
         try:
@@ -185,6 +195,8 @@ def make_app(client: Client):
     app.router.add_post('/api/volume', volume)
     app.router.add_post('/api/alarm-volume', alarm_volume)
     app.router.add_post('/api/alarm-tone', alarm_tone)
+    app.router.add_post('/api/tasks/delete', task_delete)
+    app.router.add_post('/api/tasks/stop', task_stop)
     app.router.add_post('/api/alarms/delete', alarm_delete)
     app.router.add_post('/api/alarms/snooze', alarm_snooze)
     app.router.add_post('/api/alarms/stop', alarm_stop)

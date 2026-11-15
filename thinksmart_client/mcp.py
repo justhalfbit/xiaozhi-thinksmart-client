@@ -59,6 +59,30 @@ TOOLS = [
         'inputSchema': {'type': 'object', 'properties': {}},
     },
     {
+        'name': 'self.task.create',
+        'description': '创建到点才查询或生成结果的动态任务，不在现在执行。'
+            '例如每天7点播报当天杭州天气、圣诞节查询某服务最新优惠、每天讲一个成语。'
+            '固定提醒取快递/看看新闻用self.alarm.create，不调用后台模型。意图含糊先澄清。'
+            '必须确定执行钟点；只说圣诞节没说几点需补问，转换为明确date和time，不能擅自选时间。'
+            'instruction保存执行目标，今天/最近在执行时解释，不写现在查出的答案。'
+            'tools：天气用get_weather，新闻/最新优惠/实时信息必须web_search，纯内容生成传空列表。'
+            '日期与repeat规则同self.alarm.create。创建成功后复述返回的when与repeat_text。',
+        'inputSchema': {'type': 'object', 'properties': {
+            'instruction': {'type': 'string'}, 'label': {'type': 'string'},
+            'tools': {'type': 'array', 'items': {'type': 'string', 'enum': ['get_weather', 'web_search']}},
+            'time': {'type': 'string'}, 'date': {'type': 'string'}, 'days_from_today': {'type': 'integer'},
+            'hours': {'type': 'number'}, 'minutes': {'type': 'number'}, 'seconds': {'type': 'number'},
+            'repeat': {'type': 'string', 'enum': ['daily', 'workdays', 'weekly', 'monthly']},
+            'weekdays': {'type': 'array', 'items': {'type': 'integer'}}, 'month_day': {'type': 'integer'}},
+            'required': ['instruction', 'tools']},
+    },
+    {'name': 'self.task.list', 'description': '列出动态任务及最近执行结果；查询所有提醒时也要查self.alarm.list。',
+     'inputSchema': {'type': 'object', 'properties': {}}},
+    {'name': 'self.task.cancel', 'description': '按id删除动态任务，停止本次和以后的执行，先list确认id。',
+     'inputSchema': {'type': 'object', 'properties': {'id': {'type': 'integer'}}, 'required': ['id']}},
+    {'name': 'self.task.stop', 'description': '停止当前动态任务查询或播报，保留以后的重复执行。',
+     'inputSchema': {'type': 'object', 'properties': {}}},
+    {
         'name': 'self.alarm.create',
         'description': '新建倒计时、闹钟或提醒，设备到点响铃。只传用户的意思，具体几点由设备算好返回，'
                        '你照返回的 when（和 repeat）跟用户复述一遍，例如「好的，明天早上 7 点叫你」。\n'
@@ -72,6 +96,7 @@ TOOLS = [
                        'weekly 每周几，配 weekdays（1 是周一……7 是周日，可多选）；monthly 每月几号，配 month_day'
                        '（这个月没有这一天时在当月最后一天响）。循环的必须传 time，不传日期。\n'
                        'label 是屏幕上显示的简短内容（「晾衣服」「开会」），没说就不传；'
+                       '需要到点查询/生成新内容时使用 self.task.create，例如天气播报、新闻摘要、查询优惠；提醒取快递/看看新闻仍是固定 reminder。'
                        'say 是提醒到点念的一句话（「该晾衣服了」），只用于 reminder，不传就念「提醒你，<label>」。',
         'inputSchema': {'type': 'object',
                         'properties': {'kind': {'type': 'string', 'enum': ['timer', 'alarm', 'reminder']},
@@ -90,7 +115,7 @@ TOOLS = [
         'name': 'self.alarm.list',
         'description': '列出设备上还没响的倒计时、闹钟和提醒（「我有哪些闹钟」「明天几点叫我」），'
                        '每条有 id、type、when（下次响的时间）、in（还有多久）、repeat、label；还有最近错过的条数。'
-                       '取消某一条前先用它找到 id。',
+                       '取消某一条前先用它找到 id；需要所有定时任务时还要调用self.task.list。',
         'inputSchema': {'type': 'object',
                         'properties': {'kind': {'type': 'string', 'enum': ['timer', 'alarm', 'reminder'],
                                                 'description': '只看这一种，不传就全部'}}},
@@ -196,6 +221,21 @@ async def handle(payload, client=None):
                     level=args.get('brightness'), change=args.get('change'))})
             elif name == 'self.screen.get_brightness' and client:
                 text = json.dumps(client.brightness())
+            elif name == 'self.task.create' and client:
+                if 'tools' not in args: raise ValueError('请明确指定任务需要的 tools，纯内容生成传空列表')
+                args_copy = dict(args)
+                parsed = _alarm_args(args_copy)
+                parsed = {k: v for k, v in parsed.items() if k not in ('kind', 'say', 'label')}
+                text = _dumps({'success': True, **await client.create_task(
+                    instruction=args.get('instruction'), label=args.get('label', ''), tools=args.get('tools'), **parsed)})
+            elif name == 'self.task.list' and client:
+                view = client.tasks.store.view()
+                text = _dumps({'items': [{k: i[k] for k in ('id', 'label', 'when', 'repeat_text', 'tools')} for i in view['items']],
+                               'runs': view['runs'][:5], 'error': view.get('error')})
+            elif name == 'self.task.cancel' and client:
+                text = _dumps({'success': await client.tasks.remove(int(args['id']))})
+            elif name == 'self.task.stop' and client:
+                text = _dumps({'success': True, 'stopped': await client.tasks.stop()})
             elif name == 'self.alarm.create' and client:
                 text = _dumps({'success': True, **_brief(await client.create_alarm(**_alarm_args(args)))})
             elif name == 'self.alarm.list' and client:
