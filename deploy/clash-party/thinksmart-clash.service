@@ -1,0 +1,16 @@
+[Unit]
+Description=Clash Party private display
+After=user@1000.service network-online.target
+Wants=user@1000.service
+
+[Service]
+User=ubuntu
+RuntimeDirectory=thinksmart-clash
+RuntimeDirectoryMode=0700
+Environment=DISPLAY=:73 XDG_RUNTIME_DIR=/run/user/1000 DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
+ExecStart=/opt/thinksmart/client/current/deploy/clash-party/session
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

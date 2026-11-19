@@ -6,7 +6,7 @@ import time
 
 from aiohttp import web
 
-from . import __version__, update
+from . import __version__, clash_party, update
 from .app import ROOT, Client, local_ip
 
 log = logging.getLogger(__name__)
@@ -18,6 +18,7 @@ BUILD = str(int(time.time()))
 
 def make_app(client: Client):
     app = web.Application()
+    clash_party.routes(app)
 
     async def index(_request):
         # the second design (orb with a face) is the UI since 2026-10-31; /v1 keeps the first one

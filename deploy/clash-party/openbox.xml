@@ -1,0 +1,5 @@
+<openbox_config xmlns="http://openbox.org/3.4/rc">
+  <applications>
+    <application class="mihomo-party" type="normal"><maximized>yes</maximized></application>
+  </applications>
+</openbox_config>

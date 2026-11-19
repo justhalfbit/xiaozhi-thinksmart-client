@@ -451,3 +451,13 @@ body[data-state="listening"] .mic-ring { opacity: .75; }
 .w-msg.bad { color: var(--bad); } .w-msg.ok { color: var(--ok); }
 .w-spin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid #ffffff22; border-top-color: var(--accent2); animation: wspin .8s linear infinite; }
 .w-actions { display: flex; gap: 16px; }
+
+.party-tabs,.party-tools,#partyInput { display:flex; align-items:center; gap:12px; margin-bottom:10px }
+.party-tabs .upd-btn,.party-tools .upd-btn,#partyInput .upd-btn { height:48px; min-width:100px }
+.party-tabs [aria-pressed=true] { color:#081024; background:#8ff0ff }
+#partyPanel { display:flex; flex-direction:column; flex:1; min-height:0 }
+.party-tabs { margin:0 16px 0 auto }
+#partyPanel:has(#partyInstall[hidden]) .party-tools:has(#partyStatus:empty) { display:none }
+#partyDisplay { flex:1; min-height:0; overflow:hidden }
+#partyInput input { flex:1; padding:10px; font-size:20px; min-width:0 }
+#settings [hidden] { display:none }

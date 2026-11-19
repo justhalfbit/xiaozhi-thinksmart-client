@@ -4,6 +4,8 @@
 
 它是 [thinksmart-ubuntu-image](https://github.com/justhalfbit/thinksmart-ubuntu-image) 系统镜像的一部分，刷机和安装见那边的 README；装好的设备在设置页「软件更新」里从本仓库的 Release 在线更新（系统镜像的系统层更新包也放在本仓库的 Release 里，和客户端一起显示、一起装；这些文件是设备自动下载的，刷机镜像在系统镜像仓库）。
 
+在触屏「设置 → Clash Party」点「一键安装 Clash Party」。首次安装需要访问 GitHub 和 Ubuntu 软件源。装好后可在页签内操作原版窗口，点订阅输入框后用「键盘」发送文字。设备重启会自动启动代理，默认混合端口为 `127.0.0.1:7890`。
+
 ## 结构
 
 | 位置 | 作用 |

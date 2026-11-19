@@ -125,11 +125,22 @@
 <div class="sheet" id="settings">
   <div class="sheet-bar">
     <div><h2>设置</h2><p>这台设备自己的偏好，升级客户端也会保留</p></div>
+  <div class="party-tabs">
+    <button class="upd-btn" id="generalTab" aria-pressed="true">常规</button>
+    <button class="upd-btn" id="partyTab" aria-pressed="false">Clash Party</button>
+    <button class="upd-btn" id="partyKeyboard" hidden>键盘</button>
+  </div>
     <button class="close" id="settingsClose" aria-label="关闭">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
   </div>
-  <div class="panel">
+  <section id="partyPanel" hidden>
+    <div class="party-tools"><span id="partyStatus" role="status"></span>
+      <button class="upd-btn" id="partyInstall" hidden>一键安装 Clash Party</button></div>
+    <form id="partyInput" hidden><input aria-label="发送到 Clash Party" placeholder="输入订阅地址或文字" autocomplete="off"><button class="upd-btn">发送</button></form>
+    <div id="partyDisplay"></div>
+  </section>
+  <div class="panel" id="generalPanel">
     <div class="upd" id="upd">
       <div class="opt">
         <div class="opt-text">
@@ -300,5 +311,6 @@
 </div>
 
 <script src="/static/v2/app.js"></script>
+<script type="module" src="/static/v2/clash-party.js"></script>
 </body>
 </html>

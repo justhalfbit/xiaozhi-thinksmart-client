@@ -1,0 +1,19 @@
+#!/bin/sh
+set -eu
+src=$(dirname "$0")
+state=/var/lib/thinksmart-clash
+install -d -m 755 "$state"
+install -d -o ubuntu -g ubuntu -m 700 "$state/requests"
+changed=false
+for unit in "$src"/thinksmart-clash*.service "$src"/thinksmart-clash*.path; do
+    target=/etc/systemd/system/$(basename "$unit")
+    if ! cmp -s "$unit" "$target"; then
+        install -m 644 "$unit" "$target"
+        changed=true
+    fi
+done
+if "$changed"; then systemctl daemon-reload; fi
+if ! systemctl is-enabled --quiet thinksmart-clash-install.path; then
+    systemctl enable thinksmart-clash-install.path
+fi
+systemctl start --no-block thinksmart-clash-install.path
