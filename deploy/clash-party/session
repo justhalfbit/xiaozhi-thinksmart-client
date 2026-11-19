@@ -5,7 +5,7 @@ export XAUTHORITY="$dir/Xauthority"
 touch "$XAUTHORITY"
 chmod 600 "$XAUTHORITY"
 xauth add :73 . "$(mcookie)"
-Xtigervnc :73 -auth "$XAUTHORITY" -nolisten tcp -rfbport -1 -rfbunixpath "$dir/rfb" -SecurityTypes None -geometry 1200x680 -depth 24 &
+Xvfb :73 -auth "$XAUTHORITY" -nolisten tcp -screen 0 1024x600x24 &
 display=$!
 for i in {1..50}; do xdpyinfo >/dev/null 2>&1 && break; sleep .2; done
 xdpyinfo >/dev/null
@@ -14,19 +14,13 @@ if [[ ! -e "$config/config.yaml" ]]; then
     mkdir -p "$config"
     (set -C; printf '%s\n' 'language: zh-CN' 'modeSelected: true' 'operationMode: standard' > "$config/config.yaml")
 fi
-openbox --config-file "$(dirname "$0")/openbox.xml" >/dev/null 2>&1 &
+/usr/bin/python3 "$(dirname "$0")/tray.py" &
+watcher=$!
+for i in {1..50}; do [[ -e "$dir/watcher-ready" ]] && break; sleep .1; done
+[[ -e "$dir/watcher-ready" ]]
+export XDG_CURRENT_DESKTOP=GNOME
 clash-party --ozone-platform=x11 --disable-gpu &
 app=$!
-# The native close button hides the window. Reopening the tab asks the
-# running single-instance app to show it again, even without a desktop tray.
-mkfifo -m 600 "$dir/show"
-(
-    exec 3<>"$dir/show"
-    while read -r <&3; do
-        if [[ -L "$config/SingletonLock" ]] && ! xdotool search --onlyvisible --class '^mihomo-party$' >/dev/null; then
-            clash-party --ozone-platform=x11 --disable-gpu || true
-        fi
-    done
-) &
-wait -n "$display" "$app" || true
+echo "$app" > "$dir/pid"
+wait -n "$display" "$watcher" "$app" || true
 exit 1

@@ -14,7 +14,7 @@ if [[ -e "$state/apt-pending" ]]; then
     rm -f "$state/apt-pending"
 fi
 packages=()
-for pkg in tigervnc-standalone-server openbox xauth x11-utils xclip xdotool; do
+for pkg in xvfb xauth x11-utils xdotool python3-dbus libayatana-appindicator3-1 python3-gi python3-yaml libglib2.0-bin dconf-cli; do
     if [[ $(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null) != 'install ok installed' ]]; then
         packages+=("$pkg")
     fi
@@ -42,20 +42,14 @@ if (( ${#packages[@]} )); then
     apt-get -o DPkg::Lock::Timeout=90 install --no-install-recommends --no-remove -y "${packages[@]}"
     rm -f "$state/apt-pending"
 fi
-step=安装窗口页面
+step=启动代理设置
 stage "$step"
-view="$state/novnc-1.5.0"
-if [[ ! -f "$view/core/rfb.js" ]]; then
-    curl -fsSL --retry 3 --max-time 120 -o "$tmp/novnc.tgz" https://codeload.github.com/novnc/noVNC/tar.gz/refs/tags/v1.5.0
-    echo "6a73e41f98388a5348b7902f54b02d177cb73b7e5eb0a7a0dcf688cc2c79b42a  $tmp/novnc.tgz" | sha256sum -c -
-    tar -xzf "$tmp/novnc.tgz" -C "$tmp" noVNC-1.5.0/{core,vendor,LICENSE.txt,docs}
-    mv "$tmp/noVNC-1.5.0" "$view"
-fi
-step=启动窗口
-stage "$step"
-systemctl enable --now thinksmart-clash.service
+systemctl enable thinksmart-clash.service
+systemctl restart thinksmart-clash.service
 for i in {1..90}; do
-    if runuser -u ubuntu -- env DISPLAY=:73 XAUTHORITY=/run/thinksmart-clash/Xauthority xdotool search --onlyvisible --class '^(mihomo|clash)-party$' >/dev/null; then
+    dir=/run/thinksmart-clash
+    if [[ -s "$dir/tray" && -s "$dir/pid" ]] && curl -fsS --max-time 2 --unix-socket "/tmp/mihomo-party-$(id -u ubuntu)-$(cat "$dir/pid").sock" http://localhost/version >/dev/null; then
+        touch "$state/panel-installed"
         stage 就绪
         exit 0
     fi

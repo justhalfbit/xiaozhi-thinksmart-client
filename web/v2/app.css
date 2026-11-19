@@ -452,12 +452,30 @@ body[data-state="listening"] .mic-ring { opacity: .75; }
 .w-spin { width: 22px; height: 22px; border-radius: 50%; border: 3px solid #ffffff22; border-top-color: var(--accent2); animation: wspin .8s linear infinite; }
 .w-actions { display: flex; gap: 16px; }
 
-.party-tabs,.party-tools,#partyInput { display:flex; align-items:center; gap:12px; margin-bottom:10px }
-.party-tabs .upd-btn,.party-tools .upd-btn,#partyInput .upd-btn { height:48px; min-width:100px }
-.party-tabs [aria-pressed=true] { color:#081024; background:#8ff0ff }
-#partyPanel { display:flex; flex-direction:column; flex:1; min-height:0 }
+
+.party-tabs,.party-modes { display:flex; align-items:center; gap:8px }
 .party-tabs { margin:0 16px 0 auto }
-#partyPanel:has(#partyInstall[hidden]) .party-tools:has(#partyStatus:empty) { display:none }
-#partyDisplay { flex:1; min-height:0; overflow:hidden }
-#partyInput input { flex:1; padding:10px; font-size:20px; min-width:0 }
+.party-tabs .upd-btn { height:48px; min-width:100px }
+.party-tabs [aria-pressed=true],.party-modes [aria-pressed=true] { color:#081024; background:#8ff0ff }
 #settings [hidden] { display:none }
+#partyPanel { max-width:1050px; flex:1; padding:0 4px 12px; gap:10px }
+#partyControls { padding:0; margin:0; border:0; min-width:0; display:grid; gap:16px }
+#partyControls:disabled { opacity:.65 }
+.party-card { background:var(--card); border:1px solid var(--line); border-radius:20px; padding:16px 20px }
+.party-card .opt { padding:8px 0; background:transparent; border:0; min-height:60px }
+.party-card b,.party-card label { font-size:21px; font-weight:650 }
+.party-modes button,#partyNodesHead button,.party-delay { padding:8px 16px; min-height:46px; border-radius:14px; background:var(--card2); font-size:18px }
+.party-card select,.party-card input { font:inherit; font-size:19px; min-width:0; border:1px solid var(--line); border-radius:12px; background:#171f38; color:var(--ink); height:48px; padding:0 12px }
+.party-card select { width:min(80%,650px); margin-left:16px }
+#partySubscription { display:flex; gap:10px; margin-top:12px }
+#partySubscription input { width:18%; user-select:text; -webkit-user-select:text }
+#partySubscription #partyUrl { flex:1 }
+#partySubscription .upd-btn { min-width:auto; height:48px; font-size:19px }
+#partyNodesHead,.party-node { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0 }
+#partyNodesHead { margin-top:12px }
+.party-node { border-top:1px solid var(--line) }
+.party-name { flex:1; min-width:0; white-space:normal; overflow-wrap:anywhere; text-align:left; min-height:48px; font-size:19px }
+.party-name[aria-pressed=true] { color:var(--accent2) }
+.party-delay { min-width:104px; color:var(--ink2) }
+#partyFeedback { position:sticky; top:0; z-index:1; border-radius:10px; background:#192039; padding:8px 12px; color:var(--ink2); font-size:18px }
+#partyFeedback:empty { display:none }

@@ -1,13 +1,16 @@
-"""Local kiosk controls for the dedicated Clash Party display."""
+"""Local touch controls for Clash Party and its running Mihomo instance."""
 import asyncio
+import json
 import os
+from urllib.parse import quote
 from pathlib import Path
 
-from aiohttp import WSMsgType, web
+import aiohttp
+from aiohttp import web
 
 STATE = Path('/var/lib/thinksmart-clash')
 DISPLAY_DIR = Path('/run/thinksmart-clash')
-ASSETS = STATE / 'novnc-1.5.0'
+HELPER = Path(__file__).resolve().parents[1] / 'deploy/clash-party/control.py'
 
 
 def local(request, *, origin=False):
@@ -24,9 +27,9 @@ def installation_status():
         phase = (STATE / 'status').read_text().strip()
     except FileNotFoundError:
         phase = ''
-    ready = phase == '就绪' and (DISPLAY_DIR / 'rfb').is_socket()
+    ready = phase == '就绪' and (DISPLAY_DIR / 'tray').is_file()
     if phase == '就绪' and not ready:
-        phase = '失败：窗口服务未运行'
+        phase = '失败：代理服务未就绪'
     queued = (STATE / 'requests/install').exists()
     busy = queued or bool(phase and not ready and not phase.startswith('失败'))
     return {'phase': phase, 'ready': ready, 'busy': busy}
@@ -49,72 +52,197 @@ async def install(request):
     return web.json_response({'ok': True})
 
 
-async def asset(request):
-    local(request)
-    path = (ASSETS / request.match_info['path']).resolve()
-    if not path.is_relative_to(ASSETS) or not path.is_file():
-        raise web.HTTPNotFound()
-    return web.FileResponse(path)
-
-
-async def display(request):
-    local(request, origin=True)
+async def helper(**body):
+    uid = os.getuid()
+    env = dict(os.environ, DISPLAY=':73', XAUTHORITY=str(DISPLAY_DIR / 'Xauthority'),
+               DBUS_SESSION_BUS_ADDRESS=f'unix:path=/run/user/{uid}/bus')
+    proc = await asyncio.create_subprocess_exec('/usr/bin/python3', HELPER, env=env,
+        stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE)
     try:
-        reader, writer = await asyncio.open_unix_connection(DISPLAY_DIR / 'rfb')
-    except OSError:
-        raise web.HTTPServiceUnavailable(text='窗口尚未启动')
-    try:
-        with os.fdopen(os.open(DISPLAY_DIR / 'show', os.O_NONBLOCK | os.O_WRONLY), 'wb') as fifo:
-            fifo.write(b'show\n')
-    except OSError:
-        pass  # The display may already be accepting connections during startup.
-    ws = web.WebSocketResponse(protocols=('binary',))
-    async def send():
-        while chunk := await reader.read(65536):
-            await ws.send_bytes(chunk)
-
-    async def receive():
-        async for msg in ws:
-            if msg.type != WSMsgType.BINARY:
-                break
-            writer.write(msg.data)
-            await writer.drain()
-
-    tasks = []
-    try:
-        await ws.prepare(request)
-        tasks = [asyncio.create_task(send()), asyncio.create_task(receive())]
-        await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        output, _ = await asyncio.wait_for(proc.communicate(json.dumps(body).encode()), 110)
     finally:
-        for task in tasks:
-            task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-        writer.close()
-        await ws.close()
-    return ws
-
-
-async def paste(request):
-    local(request, origin=True)
-    text = (await request.json()).get('text')
-    if not isinstance(text, str) or not 0 < len(text) <= 8192:
-        raise web.HTTPBadRequest()
-    env = dict(os.environ, DISPLAY=':73', XAUTHORITY=str(DISPLAY_DIR / 'Xauthority'))
-    # xclip forks a background selection owner after consuming stdin.
-    proc = await asyncio.create_subprocess_exec('xclip', '-selection', 'clipboard', '-in',
-        env=env, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.DEVNULL)
-    await proc.communicate(text.encode())
+        if proc.returncode is None:
+            proc.kill()
+            await proc.wait()
     if proc.returncode:
-        raise web.HTTPServiceUnavailable()
-    proc = await asyncio.create_subprocess_exec('xdotool', 'key', '--clearmodifiers', 'ctrl+v', env=env)
-    if await proc.wait():
-        raise web.HTTPServiceUnavailable()
-    return web.json_response({'ok': True})
+        raise ValueError('无法访问设备上的 Clash Party')
+    result = json.loads(output)
+    if 'error' in result:
+        raise ValueError(result['error'])
+    return result
+
+
+def core_session():
+    pid = int((DISPLAY_DIR / 'pid').read_text())
+    path = f'/tmp/mihomo-party-{os.getuid()}-{pid}.sock'
+    return aiohttp.ClientSession(connector=aiohttp.UnixConnector(path=path, limit=3),
+                                 timeout=aiohttp.ClientTimeout(total=20))
+
+
+async def core(session, path, method='GET', **kwargs):
+    async with session.request(method, 'http://localhost' + path, **kwargs) as response:
+        response.raise_for_status()
+        return await response.json() if response.status != 204 else None
+
+
+def groups_from(proxies, mode):
+    groups = []
+    for name, group in proxies.items():
+        if 'all' not in group or group.get('hidden') or mode == 'direct':
+            continue
+        if mode != 'global' and name == 'GLOBAL':
+            continue
+        nodes = []
+        for member in group['all']:
+            history = proxies.get(member, {}).get('history') or []
+            delay = history[-1].get('delay') if history else None
+            nodes.append({'name': member, 'delay': delay})
+        groups.append({'name': name, 'current': group.get('now'), 'type': group.get('type'),
+                       'selectable': group.get('type') == 'Selector', 'nodes': nodes})
+    if mode == 'global':
+        groups.sort(key=lambda g: g['name'] != 'GLOBAL')
+    return groups
+
+
+async def snapshot(session):
+    cfg, proxies, state = await asyncio.gather(core(session, '/configs'), core(session, '/proxies'),
+                                              helper(op='state'))
+    return {k: state[k] for k in ('current', 'profiles', 'system')} | {
+        'mode': cfg['mode'], 'tun': bool(cfg.get('tun', {}).get('enable')),
+        'groups': groups_from(proxies['proxies'], cfg['mode'])}
+
+
+def string(body, key, limit=1024):
+    value = body.get(key)
+    if not isinstance(value, str) or not value or len(value) > limit:
+        raise ValueError('请检查输入内容')
+    return value
+
+
+async def node_action(session, op, body, request):
+    name = string(body, 'group')
+    proxies = (await core(session, '/proxies'))['proxies']
+    group = proxies.get(name, {})
+    members = group.get('all', [])
+    if 'all' not in group or group.get('hidden'):
+        raise ValueError('代理组已变更，请刷新')
+    node = body.get('node')
+    if node is not None and (not isinstance(node, str) or node not in members):
+        raise ValueError('节点已变更，请刷新')
+    if op == 'node':
+        if node is None or group['type'] != 'Selector':
+            raise ValueError('此组不支持手动选择该节点')
+        await core(session, '/proxies/' + quote(name, safe=''), 'PUT', json={'name': node})
+        return {}
+    state = await helper(op='state')
+    params = {'url': state['testUrl'] or group.get('testUrl') or 'https://www.gstatic.com/generate_204',
+              'timeout': min(15000, max(500, int(state['timeout'])))}
+    missing = set(members) - proxies.keys()
+    providers = {}
+    if missing:
+        for provider, data in (await core(session, '/providers/proxies'))['providers'].items():
+            for p in data.get('proxies') or []:
+                if p['name'] in missing:
+                    providers[p['name']] = provider
+    batch = body.get('nodes')
+    if batch is not None:
+        if not isinstance(batch, list) or not all(isinstance(n, str) and n in members for n in batch):
+            raise ValueError('测速节点已变更，请刷新')
+        targets = batch
+    else:
+        targets = [node] if node is not None else members
+    todo = iter(targets)
+    results = {}
+    async def worker():
+        for member in todo:
+            if request.transport is None or request.transport.is_closing():
+                return
+            escaped = quote(member, safe='')
+            path = '/proxies/' + escaped + '/delay'
+            if member in providers:
+                path = '/providers/proxies/' + quote(providers[member], safe='') + '/' + escaped + '/healthcheck'
+            try:
+                reply = await core(session, path, params=params)
+                results[member] = reply['delay'] or 0
+            except TimeoutError:
+                results[member] = 0
+            except aiohttp.ClientResponseError as exc:
+                results[member] = 0 if exc.status in (408, 504) else None
+            except (aiohttp.ClientError, KeyError, TypeError):
+                results[member] = None
+    await asyncio.gather(*(worker() for _ in range(3)))
+    return {'delays': results}
+
+
+async def change(session, op, body):
+    if op == 'mode':
+        expected = body.get('mode')
+        if expected not in ('rule', 'global', 'direct'):
+            raise ValueError('无效的代理模式')
+        await helper(op=op, mode=expected)
+        key = 'mode'
+    elif op in ('sys', 'tun'):
+        expected = body.get('value')
+        if type(expected) is not bool:
+            raise ValueError('开关值无效')
+        await helper(op=op, value=expected)
+        key = 'system' if op == 'sys' else 'tun'
+    elif op == 'profile':
+        expected = string(body, 'value')
+        await helper(op=op, value=expected)
+        key = 'current'
+    elif op == 'import':
+        name = body.get('name', '')
+        if not isinstance(name, str) or len(name) > 128:
+            raise ValueError('订阅名称过长')
+        await helper(op=op, url=string(body, 'url', 8192), name=name)
+        return {}
+    else:
+        raise ValueError('未知操作')
+    for _ in range(16):
+        await asyncio.sleep(.45)
+        try:
+            if key in ('system', 'current'):
+                actual = (await helper(op='state'))[key]
+                if key == 'current':
+                    await core(session, '/version')
+            else:
+                cfg = await core(session, '/configs')
+                actual = cfg['mode'] if key == 'mode' else bool(cfg.get('tun', {}).get('enable'))
+        except (aiohttp.ClientError, OSError):
+            continue  # Applying a profile or TUN config may restart Mihomo.
+        if actual == expected:
+            return {}
+    raise ValueError('设置未生效，请检查系统代理或虚拟网卡权限，再刷新状态')
 
 
 def routes(app):
+    writes = asyncio.Lock()
+    async def panel(request):
+        local(request, origin=request.method == 'POST')
+        try:
+            async with core_session() as session:
+                if request.method == 'GET':
+                    result = await snapshot(session)
+                else:
+                    body = await request.json()
+                    if not isinstance(body, dict):
+                        raise ValueError('请求格式无效')
+                    op = body.get('op')
+                    if writes.locked():
+                        return web.json_response({'error': '上一项操作正在进行'}, status=409)
+                    async with writes:
+                        if op in ('node', 'delay'):
+                            result = await node_action(session, op, body, request)
+                        else:
+                            result = await change(session, op, body)
+                return web.json_response(result, headers={'Cache-Control': 'no-store'})
+        except (aiohttp.ClientError, OSError, TimeoutError):
+            return web.json_response({'error': '代理服务暂时无法连接，请稍后重试'}, status=503)
+        except ValueError as exc:
+            return web.json_response({'error': str(exc)}, status=400)
+
     app.router.add_get('/api/clash-party', status)
     app.router.add_post('/api/clash-party/install', install)
-    app.router.add_get('/api/clash-party/display', display)
-    app.router.add_post('/api/clash-party/paste', paste)
-    app.router.add_get('/clash-view/{path:.*}', asset)
+    app.router.add_get('/api/clash-party/panel', panel)
+    app.router.add_post('/api/clash-party/panel', panel)

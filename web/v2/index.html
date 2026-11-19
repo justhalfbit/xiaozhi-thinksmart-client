@@ -128,17 +128,36 @@
   <div class="party-tabs">
     <button class="upd-btn" id="generalTab" aria-pressed="true">常规</button>
     <button class="upd-btn" id="partyTab" aria-pressed="false">Clash Party</button>
-    <button class="upd-btn" id="partyKeyboard" hidden>键盘</button>
   </div>
     <button class="close" id="settingsClose" aria-label="关闭">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
     </button>
   </div>
-  <section id="partyPanel" hidden>
-    <div class="party-tools"><span id="partyStatus" role="status"></span>
-      <button class="upd-btn" id="partyInstall" hidden>一键安装 Clash Party</button></div>
-    <form id="partyInput" hidden><input aria-label="发送到 Clash Party" placeholder="输入订阅地址或文字" autocomplete="off"><button class="upd-btn">发送</button></form>
-    <div id="partyDisplay"></div>
+  <section class="panel" id="partyPanel" hidden>
+    <div id="partyFeedback" role="status"></div>
+    <button class="upd-btn" id="partyInstall" hidden>一键安装 Clash Party</button>
+    <fieldset id="partyControls" hidden>
+      <div class="party-card">
+        <div class="opt"><b>系统代理</b><button class="switch" id="partySystem" role="switch" aria-label="系统代理"><i></i></button></div>
+        <div class="opt"><b>虚拟网卡 TUN</b><button class="switch" id="partyTun" role="switch" aria-label="虚拟网卡"><i></i></button></div>
+        <div class="opt"><b>代理模式</b><div class="party-modes" id="partyModes">
+          <button data-mode="rule">规则</button><button data-mode="global">全局</button><button data-mode="direct">直连</button>
+        </div></div>
+      </div>
+      <div class="party-card">
+        <label for="partyProfile">订阅</label><select id="partyProfile"></select>
+        <form id="partySubscription">
+          <input id="partyUrl" type="url" required placeholder="订阅地址（HTTP 或 HTTPS）" aria-label="订阅地址" autocomplete="off" spellcheck="false">
+          <input id="partyName" maxlength="128" placeholder="名称（选填）" aria-label="订阅名称" autocomplete="off">
+          <button class="upd-btn">添加订阅</button>
+        </form>
+      </div>
+      <div class="party-card" id="partyGroupsCard">
+        <label for="partyGroup">代理组</label><select id="partyGroup"></select>
+        <div id="partyNodesHead"><b>节点</b><button id="partyBatch">测本组延迟</button></div>
+        <div id="partyNodes"></div>
+      </div>
+    </fieldset>
   </section>
   <div class="panel" id="generalPanel">
     <div class="upd" id="upd">
