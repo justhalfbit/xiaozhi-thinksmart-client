@@ -5,7 +5,7 @@ export XAUTHORITY="$dir/Xauthority"
 touch "$XAUTHORITY"
 chmod 600 "$XAUTHORITY"
 xauth add :73 . "$(mcookie)"
-Xvfb :73 -auth "$XAUTHORITY" -nolisten tcp -screen 0 1024x600x24 &
+Xtigervnc :73 -auth "$XAUTHORITY" -nolisten tcp -rfbport -1 -rfbunixpath "$dir/rfb" -SecurityTypes None -geometry 1200x680 -depth 24 &
 display=$!
 for i in {1..50}; do xdpyinfo >/dev/null 2>&1 && break; sleep .2; done
 xdpyinfo >/dev/null
@@ -18,9 +18,19 @@ fi
 watcher=$!
 for i in {1..50}; do [[ -e "$dir/watcher-ready" ]] && break; sleep .1; done
 [[ -e "$dir/watcher-ready" ]]
+openbox --config-file "$(dirname "$0")/openbox.xml" >/dev/null 2>&1 &
 export XDG_CURRENT_DESKTOP=GNOME
 clash-party --ozone-platform=x11 --disable-gpu &
 app=$!
 echo "$app" > "$dir/pid"
+mkfifo -m 600 "$dir/show"
+(
+    exec 3<>"$dir/show"
+    while read -r <&3; do
+        if [[ -L "$config/SingletonLock" ]] && ! xdotool search --onlyvisible --class '^mihomo-party$' >/dev/null; then
+            clash-party --ozone-platform=x11 --disable-gpu || true
+        fi
+    done
+) &
 wait -n "$display" "$watcher" "$app" || true
 exit 1

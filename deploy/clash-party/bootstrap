@@ -18,6 +18,6 @@ if ! systemctl is-enabled --quiet thinksmart-clash-install.path; then
 fi
 systemctl start --no-block thinksmart-clash-install.path
 # Upgrade an already managed installation once. A failed migration is retried from the panel.
-if [ -f "$state/status" ] && [ "$(cat "$state/status")" = 就绪 ] && [ ! -f "$state/panel-installed" ]; then
+if [ -f "$state/status" ] && [ "$(cat "$state/status")" = 就绪 ] && [ ! -f "$state/window-installed" ]; then
     runuser -u ubuntu -- touch "$state/requests/install"
 fi
