@@ -1,0 +1,121 @@
+#!/bin/bash
+set -eu
+state=/var/lib/thinksmart-clash
+request="$state/requests/install"
+target=
+for queued in "$state"/requests/update-*; do
+    [[ -e "$queued" ]] || break
+    request=$queued
+    target=${queued##*/update-}
+    break
+done
+stage() {
+    if [[ -n "$target" ]]; then
+        printf '%s|%s\n' "$target" "$1" > "$state/update-status.new"
+        mv "$state/update-status.new" "$state/update-status"
+        return 0
+    fi
+    printf '%s\n' "$1" > "$state/status.new"
+    mv "$state/status.new" "$state/status"
+}
+step=准备安装
+tmp=$(mktemp -d)
+finish() {
+    local result=$?
+    set +e
+    if ((result)); then stage "失败：$step"; fi
+    rm -f -- "$request"
+    rm -rf "$tmp"
+    exit "$result"
+}
+trap finish EXIT
+stage "$step"
+export DEBIAN_FRONTEND=noninteractive
+if [[ -e "$state/apt-pending" ]]; then
+    step=恢复中断的安装
+    stage "$step"
+    dpkg --configure --pending
+    rm -f "$state/apt-pending"
+fi
+packages=()
+if [[ -n "$target" ]]; then
+    [[ "$target" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+    [[ $(dpkg --print-architecture) == arm64 ]]
+    current=$(dpkg-query -W -f='${Version}' mihomo-party)
+    if dpkg --compare-versions "$target" gt "$current"; then
+        step=检查可用空间
+        stage "$step"
+        (( $(df -Pm / | awk 'END{print $4}') >= 1200 ))
+        step=下载官方安装包
+        stage "$step"
+        deb="clash-party-linux-$target-arm64.deb"
+        digest=$(/usr/bin/python3 "$(dirname "$0")/release.py" digest "$target" "$tmp/$deb")
+        step=校验安装包
+        stage "$step"
+        echo "$digest  $tmp/$deb" | sha256sum -c -
+        [[ $(dpkg-deb -f "$tmp/$deb" Package) == mihomo-party ]]
+        [[ $(dpkg-deb -f "$tmp/$deb" Architecture) == arm64 ]]
+        [[ $(dpkg-deb -f "$tmp/$deb" Version) == "$target" ]]
+        packages+=("$tmp/$deb")
+    else
+        [[ "$target" == "$current" ]]
+    fi
+fi
+for pkg in tigervnc-standalone-server openbox xclip xauth x11-utils xdotool python3-dbus libayatana-appindicator3-1 python3-gi python3-yaml libglib2.0-bin dconf-cli; do
+    if [[ $(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null) != 'install ok installed' ]]; then
+        packages+=("$pkg")
+    fi
+done
+if [[ -z "$target" ]] && ! command -v clash-party >/dev/null; then
+    step=检查可用空间
+    (( $(df -Pm / | awk 'END{print $4}') >= 1200 ))
+    step=下载官方安装包
+    stage "$step"
+    deb=clash-party-linux-2.0.4-arm64.deb
+    [[ $(dpkg --print-architecture) == arm64 ]]
+    curl --fail --location --retry 3 --connect-timeout 20 --max-time 1200 -o "$tmp/$deb" "https://github.com/mihomo-party-org/clash-party/releases/download/v2.0.4/$deb"
+    step=校验安装包
+    stage "$step"
+    echo "cc1f38075a2c4d223d80f679699b7004279e63efa12828e0e18026578731452c  $tmp/$deb" | sha256sum -c -
+    packages+=("$tmp/$deb")
+fi
+if (( ${#packages[@]} )); then
+    if [[ -z "$target" ]]; then
+        step=更新软件包索引
+        stage "$step"
+        apt-get -o Acquire::Retries=2 -o Acquire::Languages=none update --error-on=any
+    fi
+    step=安装应用和窗口组件
+    stage "$step"
+    touch "$state/apt-pending"
+    apt-get -o DPkg::Lock::Timeout=90 install --no-install-recommends --no-remove -y "${packages[@]}"
+    rm -f "$state/apt-pending"
+fi
+step=安装窗口页面
+stage "$step"
+view="$state/novnc-1.5.0"
+if [[ ! -f "$view/core/rfb.js" ]]; then
+    curl -fsSL --retry 3 --max-time 120 -o "$tmp/novnc.tgz" https://codeload.github.com/novnc/noVNC/tar.gz/refs/tags/v1.5.0
+    echo "6a73e41f98388a5348b7902f54b02d177cb73b7e5eb0a7a0dcf688cc2c79b42a  $tmp/novnc.tgz" | sha256sum -c -
+    tar -xzf "$tmp/novnc.tgz" -C "$tmp" noVNC-1.5.0/{core,vendor,LICENSE.txt,docs}
+    mv "$tmp/noVNC-1.5.0" "$view"
+fi
+if [[ -n "$target" ]]; then
+    step=核对已安装版本
+    stage "$step"
+    [[ $(dpkg-query -W -f='${Status} ${Version}' mihomo-party) == "install ok installed $target" ]]
+fi
+step=启动代理设置
+stage "$step"
+systemctl enable thinksmart-clash.service
+systemctl restart thinksmart-clash.service
+for i in {1..90}; do
+    dir=/run/thinksmart-clash
+    if [[ -S "$dir/rfb" && -s "$dir/tray" && -s "$dir/pid" ]] && curl -fsS --max-time 2 --unix-socket "/tmp/mihomo-party-$(id -u ubuntu)-$(cat "$dir/pid").sock" http://localhost/version >/dev/null; then
+        touch "$state/window-installed"
+        if [[ -n "$target" ]]; then stage 更新成功; else stage 就绪; fi
+        exit 0
+    fi
+    sleep 1
+done
+exit 1
