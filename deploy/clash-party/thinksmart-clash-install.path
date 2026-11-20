@@ -1,5 +1,6 @@
 [Path]
 PathExists=/var/lib/thinksmart-clash/requests/install
+PathExistsGlob=/var/lib/thinksmart-clash/requests/update-*
 
 [Install]
 WantedBy=multi-user.target
